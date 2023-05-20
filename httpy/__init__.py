@@ -45,9 +45,6 @@ class Body:
     def close(self):
         return self._response.close()
 
-    def __del__(self):
-        self.close()
-
 
 class HttpRequest:
     def __init__(self,
@@ -127,6 +124,10 @@ class HttpResponse:
 class HttpClient:
     def __init__(self):
         self.connections = {}
+
+    def close(self):
+        for _, connection in self.connections.items():
+            connection.close()
 
     def do(self, request: HttpRequest) -> HttpResponse:
         return self._do(request, 1)
