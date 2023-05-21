@@ -10,7 +10,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         paths = {
             '/redirect-once': redirect_once,
-            '/end': redirect_end
+            '/ok': ok
         }
         url_parts = urlsplit(self.path)
         handler = paths.get(url_parts.path)
@@ -25,11 +25,11 @@ class RequestHandler(BaseHTTPRequestHandler):
 def redirect_once(handler: RequestHandler):
     handler.send_response(301)
     handler.send_header('location',
-                        'https://%s:%s/end' % (handler.server.server_address[0], handler.server.server_address[1]))
+                        'https://%s:%s/ok' % (handler.server.server_address[0], handler.server.server_address[1]))
     handler.end_headers()
 
 
-def redirect_end(handler: RequestHandler):
+def ok(handler: RequestHandler):
     handler.send_response(200)
     handler.end_headers()
 
@@ -67,7 +67,7 @@ class TestRedirects(unittest.TestCase):
         response.get_body().close()
 
         self.assertEqual(status, 301)
-        target_location = 'https://%s:%d/end' % (host, port)
+        target_location = 'https://%s:%d/ok' % (host, port)
         self.assertEqual(target_location, location)
 
 
