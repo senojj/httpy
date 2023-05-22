@@ -62,7 +62,7 @@ class HttpRequest:
         if parameters is not None:
             qs.update(parameters)
 
-        parts._replace(query=urlencode(qs, doseq=True))
+        parts = parts._replace(query=urlencode(qs, doseq=True))
         self._url = urlunsplit(parts)
         self._method = method
         self._headers = headers
@@ -193,9 +193,9 @@ class HttpClient:
 
         new_url_parts = urlsplit(location)
 
-        if new_url_parts.netloc != '':
-            new_url_parts._replace(scheme=url_parts.scheme,
-                                   netloc=url_parts.netloc)
+        if new_url_parts.netloc == '':
+            new_url_parts = new_url_parts._replace(scheme=url_parts.scheme,
+                                                   netloc=url_parts.netloc)
 
         method = request.get_method()
 
