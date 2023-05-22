@@ -11,6 +11,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         paths = {
             '/generic': generic,
             '/get-only': get_only,
+            '/post-only': post_only,
             '/ok-only': ok_only
         }
         url_parts = urlsplit(self.path)
@@ -54,6 +55,14 @@ def get_only(handler: RequestHandler):
     handler.end_headers()
 
 
+def post_only(handler: RequestHandler):
+    if handler.command != httpy.METHOD_POST:
+        handler.send_response(httpy.STATUS_METHOD_NOT_ALLOWED)
+    else:
+        handler.send_response(httpy.STATUS_OK)
+    handler.end_headers()
+
+
 def ok_only(handler: RequestHandler):
     handler.send_response(httpy.STATUS_OK)
     handler.end_headers()
@@ -76,7 +85,7 @@ def tearDownModule():
 class TestRedirects(unittest.TestCase):
     def test_redirect_301_follow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
-                                    headers={'status': '301', 'to': '/ok-only'})
+                                    headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY), 'to': '/ok-only'})
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -85,7 +94,7 @@ class TestRedirects(unittest.TestCase):
 
     def test_redirect_301_nofollow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
-                                    headers={'status': '301', 'to': '/ok-only'},
+                                    headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY), 'to': '/ok-only'},
                                     follow_redirects=False)
         response = client.do(request)
         status = response.get_status()
@@ -96,9 +105,32 @@ class TestRedirects(unittest.TestCase):
         target_location = '/ok-only'
         self.assertEqual(target_location, location)
 
+    def test_redirect_302_follow(self):
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    headers={'status': str(httpy.STATUS_FOUND), 'to': '/ok-only'})
+        response = client.do(request)
+        status = response.get_status()
+        response.get_body().close()
+
+        self.assertEqual(status, httpy.STATUS_OK)
+
+    def test_redirect_302_nofollow(self):
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    headers={'status': str(httpy.STATUS_FOUND), 'to': '/ok-only'},
+                                    follow_redirects=False)
+        response = client.do(request)
+        status = response.get_status()
+        location = response.get_headers().get('location')
+        response.get_body().close()
+
+        self.assertEqual(status, httpy.STATUS_FOUND)
+        target_location = '/ok-only'
+        self.assertEqual(target_location, location)
+
     def test_redirect_303_follow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
-                                    headers={'status': '303', 'to': '/get-only'})
+                                    method=httpy.METHOD_POST,
+                                    headers={'status': str(httpy.STATUS_SEE_OTHER), 'to': '/get-only'})
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -107,7 +139,8 @@ class TestRedirects(unittest.TestCase):
 
     def test_redirect_303_nofollow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
-                                    headers={'status': '303', 'to': '/get-only'},
+                                    method=httpy.METHOD_POST,
+                                    headers={'status': str(httpy.STATUS_SEE_OTHER), 'to': '/get-only'},
                                     follow_redirects=False)
         response = client.do(request)
         status = response.get_status()
@@ -116,6 +149,73 @@ class TestRedirects(unittest.TestCase):
 
         self.assertEqual(status, httpy.STATUS_SEE_OTHER)
         target_location = '/get-only'
+        self.assertEqual(target_location, location)
+
+    def test_redirect_304_follow(self):
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    headers={'status': str(httpy.STATUS_NOT_MODIFIED)})
+        response = client.do(request)
+        status = response.get_status()
+        response.get_body().close()
+
+        self.assertEqual(status, httpy.STATUS_NOT_MODIFIED)
+
+    def test_redirect_304_nofollow(self):
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    headers={'status': str(httpy.STATUS_NOT_MODIFIED)},
+                                    follow_redirects=False)
+        response = client.do(request)
+        status = response.get_status()
+        response.get_body().close()
+
+        self.assertEqual(status, httpy.STATUS_NOT_MODIFIED)
+
+    def test_redirect_307_follow(self):
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    method=httpy.METHOD_POST,
+                                    headers={'status': str(httpy.STATUS_TEMPORARY_REDIRECT), 'to': '/post-only'})
+        response = client.do(request)
+        status = response.get_status()
+        response.get_body().close()
+
+        self.assertEqual(status, httpy.STATUS_OK)
+
+    def test_redirect_307_nofollow(self):
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    method=httpy.METHOD_POST,
+                                    headers={'status': str(httpy.STATUS_TEMPORARY_REDIRECT), 'to': '/post-only'},
+                                    follow_redirects=False)
+        response = client.do(request)
+        status = response.get_status()
+        location = response.get_headers().get('location')
+        response.get_body().close()
+
+        self.assertEqual(status, httpy.STATUS_TEMPORARY_REDIRECT)
+        target_location = '/post-only'
+        self.assertEqual(target_location, location)
+
+    def test_redirect_308_follow(self):
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    method=httpy.METHOD_POST,
+                                    headers={'status': str(httpy.STATUS_PERMANENT_REDIRECT), 'to': '/post-only'})
+        response = client.do(request)
+        status = response.get_status()
+        response.get_body().close()
+
+        self.assertEqual(status, httpy.STATUS_OK)
+
+    def test_redirect_308_nofollow(self):
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    method=httpy.METHOD_POST,
+                                    headers={'status': str(httpy.STATUS_PERMANENT_REDIRECT), 'to': '/post-only'},
+                                    follow_redirects=False)
+        response = client.do(request)
+        status = response.get_status()
+        location = response.get_headers().get('location')
+        response.get_body().close()
+
+        self.assertEqual(status, httpy.STATUS_PERMANENT_REDIRECT)
+        target_location = '/post-only'
         self.assertEqual(target_location, location)
 
 
