@@ -9,10 +9,9 @@ import httpy
 class RequestHandler(BaseHTTPRequestHandler):
     def handle_any(self):
         paths = {
-            '/redirect-permanent-once': redirect_permanent_once,
-            '/ok': ok,
-            '/redirect-see-other': redirect_see_other,
-            '/get-other': get_other
+            '/generic': generic,
+            '/get-only': get_only,
+            '/ok-only': ok_only
         }
         url_parts = urlsplit(self.path)
         handler = paths.get(url_parts.path)
@@ -30,28 +29,33 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.handle_any()
 
 
-def redirect_permanent_once(handler: RequestHandler):
-    handler.send_response(httpy.STATUS_MOVED_PERMANENTLY)
-    handler.send_header('location', '/ok')
+def generic(handler: RequestHandler):
+    status = handler.headers.get('status')
+
+    if status is None:
+        status = httpy.STATUS_OK
+
+    handler.send_response(int(status))
+
+    to = handler.headers.get('to')
+
+    if to is None:
+        to = '/generic'
+
+    handler.send_header('location', to)
     handler.end_headers()
 
 
-def ok(handler: RequestHandler):
-    handler.send_response(httpy.STATUS_OK)
-    handler.end_headers()
-
-
-def redirect_see_other(handler: RequestHandler):
-    handler.send_response(httpy.STATUS_SEE_OTHER)
-    handler.send_header('location', '/get-other')
-    handler.end_headers()
-
-
-def get_other(handler: RequestHandler):
+def get_only(handler: RequestHandler):
     if handler.command != httpy.METHOD_GET:
-        handler.send_response(httpy.STATUS_NOT_FOUND)
+        handler.send_response(httpy.STATUS_METHOD_NOT_ALLOWED)
     else:
         handler.send_response(httpy.STATUS_OK)
+    handler.end_headers()
+
+
+def ok_only(handler: RequestHandler):
+    handler.send_response(httpy.STATUS_OK)
     handler.end_headers()
 
 
@@ -71,7 +75,8 @@ def tearDownModule():
 
 class TestRedirects(unittest.TestCase):
     def test_redirect_301_follow(self):
-        request = httpy.HttpRequest(url='https://%s:%d/redirect-permanent-once' % httpd.server_address)
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    headers={'status': '301', 'to': '/ok-only'})
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -79,7 +84,8 @@ class TestRedirects(unittest.TestCase):
         self.assertEqual(status, httpy.STATUS_OK)
 
     def test_redirect_301_nofollow(self):
-        request = httpy.HttpRequest(url='https://%s:%d/redirect-permanent-once' % httpd.server_address,
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    headers={'status': '301', 'to': '/ok-only'},
                                     follow_redirects=False)
         response = client.do(request)
         status = response.get_status()
@@ -87,11 +93,12 @@ class TestRedirects(unittest.TestCase):
         response.get_body().close()
 
         self.assertEqual(status, httpy.STATUS_MOVED_PERMANENTLY)
-        target_location = '/ok'
+        target_location = '/ok-only'
         self.assertEqual(target_location, location)
 
     def test_redirect_303_follow(self):
-        request = httpy.HttpRequest(url='https://%s:%d/redirect-see-other' % httpd.server_address)
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    headers={'status': '303', 'to': '/get-only'})
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -99,7 +106,8 @@ class TestRedirects(unittest.TestCase):
         self.assertEqual(status, httpy.STATUS_OK)
 
     def test_redirect_303_nofollow(self):
-        request = httpy.HttpRequest(url='https://%s:%d/redirect-see-other' % httpd.server_address,
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    headers={'status': '303', 'to': '/get-only'},
                                     follow_redirects=False)
         response = client.do(request)
         status = response.get_status()
@@ -107,7 +115,7 @@ class TestRedirects(unittest.TestCase):
         response.get_body().close()
 
         self.assertEqual(status, httpy.STATUS_SEE_OTHER)
-        target_location = '/get-other'
+        target_location = '/get-only'
         self.assertEqual(target_location, location)
 
 
