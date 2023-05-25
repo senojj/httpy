@@ -144,14 +144,19 @@ class HttpRequest:
 
 class HttpResponse:
     def __init__(self,
+                 url: str,
                  status: int,
                  version: int,
                  headers: Header,
                  body: Body):
+        self._url = url
         self._status = status
         self._version = version
         self._headers = headers
         self._body = body
+
+    def get_url(self) -> str:
+        return self._url
 
     def get_status(self) -> int:
         return self._status
@@ -221,7 +226,8 @@ class HttpClient:
 
         response = connection.getresponse()
 
-        response = HttpResponse(response.status,
+        response = HttpResponse(request.get_url(),
+                                response.status,
                                 response.version,
                                 Header(response.headers),
                                 Body(response))
@@ -238,9 +244,11 @@ class HttpClient:
 
         new_url_parts = urlsplit(location)
 
+        if new_url_parts.scheme == '':
+            new_url_parts = new_url_parts._replace(scheme=url_parts.scheme)
+
         if new_url_parts.netloc == '':
-            new_url_parts = new_url_parts._replace(scheme=url_parts.scheme,
-                                                   netloc=url_parts.netloc)
+            new_url_parts = new_url_parts._replace(netloc=url_parts.netloc)
 
         method = request.get_method()
 
@@ -252,4 +260,4 @@ class HttpClient:
                                        headers=request.get_headers(),
                                        body=request.get_body())
 
-        return self._do(redirect_request, ++redirect_count)
+        return self._do(redirect_request, redirect_count + 1)

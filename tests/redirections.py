@@ -105,6 +105,27 @@ class TestRedirects(unittest.TestCase):
         target_location = '/ok-only'
         self.assertEqual(target_location, location)
 
+    def test_redirect_http_to_https(self):
+        request = httpy.HttpRequest(url='http://%s:%d/generic' % httpd.server_address,
+                                    headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY), 'to': 'https:///ok-only'})
+        response = client.do(request)
+        status = response.get_status()
+        url = response.get_url()
+        response.get_body().close()
+
+        self.assertEqual(status, httpy.STATUS_OK)
+        self.assertEqual(url, 'https://%s:%d/ok-only' % httpd.server_address)
+
+    def test_redirect_exceed_maximum(self):
+        request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
+                                    headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY), 'to': 'https:///generic'},
+                                    max_redirects=3)
+
+        def subject():
+            client.do(request)
+
+        self.assertRaises(ValueError, subject)
+
     def test_redirect_302_follow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpd.server_address,
                                     headers={'status': str(httpy.STATUS_FOUND), 'to': '/ok-only'})
