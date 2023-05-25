@@ -1,3 +1,4 @@
+import ssl
 from typing import Optional, Dict, List
 from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
@@ -68,6 +69,10 @@ STATUS_SERVICE_UNAVAILABLE = 503
 STATUS_GATEWAY_TIMEOUT = 504
 STATUS_HTTP_VERSION_NOT_SUPPORTED = 505
 
+SCHEME_HTTP = 'http'
+SCHEME_HTTPS = 'https'
+DEFAULT_SCHEME = SCHEME_HTTP
+
 
 class Header:
     def __init__(self, message: Message):
@@ -98,9 +103,9 @@ class HttpRequest:
                  headers: Optional[Dict[str, str]] = None,
                  parameters: Optional[Dict[str, List[str]]] = None,
                  body: Optional[bytes] = None,
-                 tls: Optional[bool] = None,
                  follow_redirects: bool = True,
-                 max_redirects: Optional[int] = 10):
+                 max_redirects: Optional[int] = 10,
+                 context: Optional[ssl.SSLContext] = None):
         parts = urlsplit(url)
         qs = parse_qs(parts.query)
 
@@ -113,9 +118,9 @@ class HttpRequest:
         self._headers = headers
         self._parameters = parameters
         self._body = body
-        self._tls = tls
         self._follow_redirects = follow_redirects
         self._max_redirects = max_redirects
+        self._context = context
 
     def get_url(self) -> str:
         return self._url
@@ -132,14 +137,14 @@ class HttpRequest:
     def get_body(self) -> Optional[bytes]:
         return self._body
 
-    def use_tls(self) -> Optional[bool]:
-        return self._tls
-
     def should_follow_redirects(self) -> bool:
         return self._follow_redirects
 
     def get_max_redirects(self) -> Optional[int]:
         return self._max_redirects
+
+    def get_context(self) -> Optional[ssl.SSLContext]:
+        return self._context
 
 
 class HttpResponse:
@@ -183,31 +188,34 @@ class HttpClient:
         return self._do(request, 1)
 
     def _do(self, request: HttpRequest, redirect_count: int) -> HttpResponse:
+        print(request.get_url())
         max_redirects = request.get_max_redirects()
 
         if max_redirects is not None and redirect_count > max_redirects:
             raise ValueError('exceeded maximum redirections')
 
         url_parts = urlsplit(request.get_url())
+
+        if url_parts.scheme.strip() == '':
+            url_parts = url_parts._replace(scheme=DEFAULT_SCHEME)
+
         port = url_parts.port
 
         if port is None:
             port = _SCHEME_PORT.get(url_parts.scheme)
 
+        scheme = url_parts.scheme
         host = url_parts.hostname
-        connection = self.connections.get((host, port))
+        connection = self.connections.get((scheme, host, port))
 
-        use_tls = port == 443
-
-        if request.use_tls() is not None:
-            use_tls = request.use_tls()
+        use_tls = url_parts.scheme == SCHEME_HTTPS
 
         if connection is None:
             if use_tls:
-                connection = HTTPSConnection(host, port)
+                connection = HTTPSConnection(host, port, context=request.get_context())
             else:
                 connection = HTTPConnection(host, port)
-            self.connections[(host, port)] = connection
+            self.connections[(scheme, host, port)] = connection
 
         headers = request.get_headers()
 
@@ -219,14 +227,16 @@ class HttpClient:
         if method is None:
             method = METHOD_GET
 
+        request_url = urlunsplit(url_parts)
+
         connection.request(method,
-                           request.get_url(),
+                           request_url,
                            body=request.get_body(),
                            headers=headers)
 
         response = connection.getresponse()
 
-        response = HttpResponse(request.get_url(),
+        response = HttpResponse(request_url,
                                 response.status,
                                 response.version,
                                 Header(response.headers),
@@ -244,11 +254,25 @@ class HttpClient:
 
         new_url_parts = urlsplit(location)
 
-        if new_url_parts.scheme == '':
-            new_url_parts = new_url_parts._replace(scheme=url_parts.scheme)
+        host = new_url_parts.hostname
 
-        if new_url_parts.netloc == '':
-            new_url_parts = new_url_parts._replace(netloc=url_parts.netloc)
+        if host is None:
+            host = url_parts.hostname
+
+        port = new_url_parts.port
+
+        if port is None:
+            port = url_parts.port
+
+        if port is None:
+            netloc = host
+        else:
+            netloc = '%s:%d' % (host, port)
+
+        new_url_parts = new_url_parts._replace(netloc=netloc)
+
+        if new_url_parts.scheme.strip() == '':
+            new_url_parts = new_url_parts._replace(scheme=url_parts.scheme)
 
         method = request.get_method()
 
@@ -258,6 +282,7 @@ class HttpClient:
         redirect_request = HttpRequest(urlunsplit(new_url_parts),
                                        method=method,
                                        headers=request.get_headers(),
-                                       body=request.get_body())
+                                       body=request.get_body(),
+                                       context=request.get_context())
 
         return self._do(redirect_request, redirect_count + 1)
