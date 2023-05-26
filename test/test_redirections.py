@@ -104,7 +104,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_301_follow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY),
-                                             'to': 'http://:%d/ok-only' % httpd.server_address[1]},
+                                             'to': 'http://%s:%d/ok-only' % httpd.server_address},
                                     context=ctx_no_check)
         response = client.do(request)
         status = response.get_status()
@@ -129,7 +129,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_http_to_https(self):
         request = httpy.HttpRequest(url='http://%s:%d/generic' % httpd.server_address,
                                     headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY),
-                                             'to': 'https://:%d/ok-only' % httpsd.server_address[1]},
+                                             'to': 'https://%s:%d/ok-only' % httpsd.server_address},
                                     context=ctx_no_check)
         response = client.do(request)
         status = response.get_status()
@@ -142,7 +142,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_exceed_maximum(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY),
-                                             'to': 'https://:%d/generic' % httpsd.server_address[1]},
+                                             'to': 'https://%s:%d/generic' % httpsd.server_address},
                                     max_redirects=3,
                                     context=ctx_no_check)
 

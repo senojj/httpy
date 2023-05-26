@@ -1,7 +1,7 @@
 import ssl
 from typing import Optional, Dict, List
 from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
-from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
+from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs, SplitResult
 from email.message import Message
 
 _SCHEME_PORT = {
@@ -106,6 +106,39 @@ def _remove_dot_segments(path: str) -> str:
     evaluate_segment()
 
     return '/'.join(output)
+
+
+def _merge_path(base_parts: SplitResult, reference_parts: SplitResult) -> str:
+    if base_parts.netloc != '' and base_parts.path == '':
+        return '/' + reference_parts.path
+    else:
+        return base_parts.path[0:base_parts.path.rfind('/')] + reference_parts.path
+
+
+def _process_reference_url(base_parts: SplitResult, reference_parts: SplitResult) -> str:
+    target_parts = reference_parts
+
+    if reference_parts.scheme != '':
+        target_parts = target_parts._replace(path=_remove_dot_segments(reference_parts.path))
+        return urlunsplit(target_parts)
+    else:
+        if reference_parts.netloc != '':
+            target_parts = target_parts._replace(path=_remove_dot_segments(reference_parts.path))
+        else:
+            if reference_parts.path == '':
+                target_parts = target_parts._replace(path=base_parts.path)
+                if reference_parts.query == '':
+                    target_parts = target_parts._replace(query=base_parts.query)
+            else:
+                if reference_parts.path.find('/') == 0:
+                    target_parts = target_parts._replace(path=_remove_dot_segments(reference_parts.path))
+                else:
+                    merged_path = _merge_path(base_parts, reference_parts)
+                    target_parts = target_parts._replace(path=_remove_dot_segments(merged_path))
+            target_parts = target_parts._replace(netloc=base_parts.netloc)
+        target_parts = target_parts._replace(scheme=base_parts.scheme)
+
+    return urlunsplit(target_parts)
 
 
 class Header:
@@ -288,32 +321,14 @@ class HttpClient:
 
         new_url_parts = urlsplit(location)
 
-        host = new_url_parts.hostname
-
-        if host is None:
-            host = url_parts.hostname
-
-        port = new_url_parts.port
-
-        if port is None:
-            port = url_parts.port
-
-        if port is None:
-            netloc = host
-        else:
-            netloc = '%s:%d' % (host, port)
-
-        new_url_parts = new_url_parts._replace(netloc=netloc)
-
-        if new_url_parts.scheme.strip() == '':
-            new_url_parts = new_url_parts._replace(scheme=url_parts.scheme)
+        target_url = _process_reference_url(url_parts, new_url_parts)
 
         method = request.get_method()
 
         if status == 303:
             method = METHOD_GET
 
-        redirect_request = HttpRequest(urlunsplit(new_url_parts),
+        redirect_request = HttpRequest(target_url,
                                        method=method,
                                        headers=request.get_headers(),
                                        body=request.get_body(),
