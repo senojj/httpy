@@ -74,6 +74,40 @@ SCHEME_HTTPS = 'https'
 DEFAULT_SCHEME = SCHEME_HTTP
 
 
+def _remove_dot_segments(path: str) -> str:
+    reference = list(path)
+    reference.reverse()
+    output = []
+    buf = []
+    tpos = 0
+    spos = 0
+
+    def evaluate_segment():
+        segment = ''.join(buf)
+        if segment == '..':
+            if len(output) > 0 and spos > 0:
+                output.pop()
+        elif segment == '.':
+            pass
+        else:
+            output.append(segment)
+        buf.clear()
+
+    while len(reference) > 0:
+        token = reference.pop()
+
+        if token == '/':
+            evaluate_segment()
+            spos = tpos
+        else:
+            buf.append(token)
+        tpos = tpos + 1
+
+    evaluate_segment()
+
+    return '/'.join(output)
+
+
 class Header:
     def __init__(self, message: Message):
         self._message = message
