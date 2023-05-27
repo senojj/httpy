@@ -77,17 +77,18 @@ httpsd.socket = ssl.wrap_socket(httpsd.socket,
                                 certfile='./localhost.crt',
                                 server_side=True)
 
-ctx_no_check = ssl.create_default_context()
-ctx_no_check.check_hostname = False
-ctx_no_check.verify_mode = ssl.CERT_NONE
-
 p1 = Thread(target=httpd.serve_forever)
 p2 = Thread(target=httpsd.serve_forever)
 p1.daemon = True
 p2.daemon = True
 p1.start()
 p2.start()
-client = httpy.HttpClient()
+
+ctx_no_check = ssl.create_default_context()
+ctx_no_check.check_hostname = False
+ctx_no_check.verify_mode = ssl.CERT_NONE
+
+client = httpy.HttpClient(context=ctx_no_check)
 
 
 def tearDownModule():
@@ -104,8 +105,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_301_follow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY),
-                                             'to': 'http://%s:%d/ok-only' % httpd.server_address},
-                                    context=ctx_no_check)
+                                             'to': 'http://%s:%d/ok-only' % httpd.server_address})
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -115,8 +115,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_301_nofollow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY), 'to': '/ok-only'},
-                                    follow_redirects=False,
-                                    context=ctx_no_check)
+                                    follow_redirects=False)
         response = client.do(request)
         status = response.get_status()
         location = response.get_headers().get('location')
@@ -129,8 +128,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_http_to_https(self):
         request = httpy.HttpRequest(url='http://%s:%d/generic' % httpd.server_address,
                                     headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY),
-                                             'to': 'https://%s:%d/ok-only' % httpsd.server_address},
-                                    context=ctx_no_check)
+                                             'to': 'https://%s:%d/ok-only' % httpsd.server_address})
         response = client.do(request)
         status = response.get_status()
         url = response.get_url()
@@ -143,8 +141,7 @@ class TestRedirects(unittest.TestCase):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     headers={'status': str(httpy.STATUS_MOVED_PERMANENTLY),
                                              'to': 'https://%s:%d/generic' % httpsd.server_address},
-                                    max_redirects=3,
-                                    context=ctx_no_check)
+                                    max_redirects=3)
 
         def subject():
             client.do(request)
@@ -153,8 +150,7 @@ class TestRedirects(unittest.TestCase):
 
     def test_redirect_302_follow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
-                                    headers={'status': str(httpy.STATUS_FOUND), 'to': '/ok-only'},
-                                    context=ctx_no_check)
+                                    headers={'status': str(httpy.STATUS_FOUND), 'to': '/ok-only'})
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -164,8 +160,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_302_nofollow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     headers={'status': str(httpy.STATUS_FOUND), 'to': '/ok-only'},
-                                    follow_redirects=False,
-                                    context=ctx_no_check)
+                                    follow_redirects=False)
         response = client.do(request)
         status = response.get_status()
         location = response.get_headers().get('location')
@@ -178,8 +173,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_303_follow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     method=httpy.METHOD_POST,
-                                    headers={'status': str(httpy.STATUS_SEE_OTHER), 'to': '/get-only'},
-                                    context=ctx_no_check)
+                                    headers={'status': str(httpy.STATUS_SEE_OTHER), 'to': '/get-only'})
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -190,8 +184,7 @@ class TestRedirects(unittest.TestCase):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     method=httpy.METHOD_POST,
                                     headers={'status': str(httpy.STATUS_SEE_OTHER), 'to': '/get-only'},
-                                    follow_redirects=False,
-                                    context=ctx_no_check)
+                                    follow_redirects=False)
         response = client.do(request)
         status = response.get_status()
         location = response.get_headers().get('location')
@@ -203,8 +196,7 @@ class TestRedirects(unittest.TestCase):
 
     def test_redirect_304_follow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
-                                    headers={'status': str(httpy.STATUS_NOT_MODIFIED)},
-                                    context=ctx_no_check)
+                                    headers={'status': str(httpy.STATUS_NOT_MODIFIED)})
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -214,8 +206,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_304_nofollow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     headers={'status': str(httpy.STATUS_NOT_MODIFIED)},
-                                    follow_redirects=False,
-                                    context=ctx_no_check)
+                                    follow_redirects=False)
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -225,8 +216,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_307_follow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     method=httpy.METHOD_POST,
-                                    headers={'status': str(httpy.STATUS_TEMPORARY_REDIRECT), 'to': '/post-only'},
-                                    context=ctx_no_check)
+                                    headers={'status': str(httpy.STATUS_TEMPORARY_REDIRECT), 'to': '/post-only'})
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -237,8 +227,7 @@ class TestRedirects(unittest.TestCase):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     method=httpy.METHOD_POST,
                                     headers={'status': str(httpy.STATUS_TEMPORARY_REDIRECT), 'to': '/post-only'},
-                                    follow_redirects=False,
-                                    context=ctx_no_check)
+                                    follow_redirects=False)
         response = client.do(request)
         status = response.get_status()
         location = response.get_headers().get('location')
@@ -251,8 +240,7 @@ class TestRedirects(unittest.TestCase):
     def test_redirect_308_follow(self):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     method=httpy.METHOD_POST,
-                                    headers={'status': str(httpy.STATUS_PERMANENT_REDIRECT), 'to': '/post-only'},
-                                    context=ctx_no_check)
+                                    headers={'status': str(httpy.STATUS_PERMANENT_REDIRECT), 'to': '/post-only'})
         response = client.do(request)
         status = response.get_status()
         response.get_body().close()
@@ -263,8 +251,7 @@ class TestRedirects(unittest.TestCase):
         request = httpy.HttpRequest(url='https://%s:%d/generic' % httpsd.server_address,
                                     method=httpy.METHOD_POST,
                                     headers={'status': str(httpy.STATUS_PERMANENT_REDIRECT), 'to': '/post-only'},
-                                    follow_redirects=False,
-                                    context=ctx_no_check)
+                                    follow_redirects=False)
         response = client.do(request)
         status = response.get_status()
         location = response.get_headers().get('location')

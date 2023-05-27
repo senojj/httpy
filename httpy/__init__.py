@@ -171,8 +171,7 @@ class HttpRequest:
                  parameters: Optional[Dict[str, List[str]]] = None,
                  body: Optional[bytes] = None,
                  follow_redirects: bool = True,
-                 max_redirects: Optional[int] = 10,
-                 context: Optional[ssl.SSLContext] = None):
+                 max_redirects: Optional[int] = 10):
         parts = urlsplit(url)
         qs = parse_qs(parts.query)
 
@@ -187,7 +186,6 @@ class HttpRequest:
         self._body = body
         self._follow_redirects = follow_redirects
         self._max_redirects = max_redirects
-        self._context = context
 
     def get_url(self) -> str:
         return self._url
@@ -209,9 +207,6 @@ class HttpRequest:
 
     def get_max_redirects(self) -> Optional[int]:
         return self._max_redirects
-
-    def get_context(self) -> Optional[ssl.SSLContext]:
-        return self._context
 
 
 class HttpResponse:
@@ -244,11 +239,12 @@ class HttpResponse:
 
 
 class HttpClient:
-    def __init__(self):
-        self.connections = {}
+    def __init__(self, context: Optional[ssl.SSLContext] = None):
+        self._connections = {}
+        self._context = context
 
     def close(self):
-        for _, connection in self.connections.items():
+        for _, connection in self._connections.items():
             connection.close()
 
     def do(self, request: HttpRequest) -> HttpResponse:
@@ -273,16 +269,16 @@ class HttpClient:
 
         scheme = url_parts.scheme
         host = url_parts.hostname
-        connection = self.connections.get((scheme, host, port))
+        connection = self._connections.get((scheme, host, port))
 
         use_tls = url_parts.scheme == SCHEME_HTTPS
 
         if connection is None:
             if use_tls:
-                connection = HTTPSConnection(host, port, context=request.get_context())
+                connection = HTTPSConnection(host, port, context=self._context)
             else:
                 connection = HTTPConnection(host, port)
-            self.connections[(scheme, host, port)] = connection
+            self._connections[(scheme, host, port)] = connection
 
         headers = request.get_headers()
 
@@ -331,7 +327,6 @@ class HttpClient:
         redirect_request = HttpRequest(target_url,
                                        method=method,
                                        headers=request.get_headers(),
-                                       body=request.get_body(),
-                                       context=request.get_context())
+                                       body=request.get_body())
 
         return self._do(redirect_request, redirect_count + 1)
