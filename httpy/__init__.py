@@ -1,5 +1,5 @@
 import ssl
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs, SplitResult
 from email.message import Message
@@ -238,6 +238,24 @@ class HttpResponse:
         return self._body
 
 
+class Pool:
+    def __init__(self, connections: Dict[Tuple[str, str, int], HTTPConnection]):
+        self._connections = connections
+
+    def clear(self):
+        for item in self._connections:
+            self._connections[item].close()
+
+        self._connections.clear()
+
+    def remove(self, scheme: str, host: str, port: int):
+        item = self._connections.get((scheme, host, port))
+
+        if item is not None:
+            item.close()
+            del self._connections[(scheme, host, port)]
+
+
 class HttpClient:
     def __init__(self, context: Optional[ssl.SSLContext] = None):
         self._connections = {}
@@ -246,6 +264,9 @@ class HttpClient:
     def close(self):
         for _, connection in self._connections.items():
             connection.close()
+
+    def get_pool(self) -> Pool:
+        return Pool(self._connections)
 
     def do(self, request: HttpRequest) -> HttpResponse:
         return self._do(request, 1)
