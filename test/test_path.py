@@ -1,7 +1,7 @@
 import unittest
 from urllib.parse import urlsplit
 
-from httpy import _remove_dot_segments, _merge_path, _process_reference_url
+from httpy import _remove_dot_segments, _process_reference_url
 
 
 class TestPath(unittest.TestCase):
@@ -17,28 +17,8 @@ class TestPath(unittest.TestCase):
 
         self.assertEqual(target, _remove_dot_segments(reference))
 
-    def test_merge_standard(self):
-        base = 'https://somplace.org/test1/test2/'
-        reference = 'test3/test4'
-        target = '/test1/test2/test3/test4'
-
-        base_parts = urlsplit(base)
-        reference_parts = urlsplit(reference)
-
-        self.assertEqual(target, _merge_path(base_parts, reference_parts))
-
-    def test_merge_missing_trailing_slash(self):
-        base = 'https://somplace.org/test1/test2'
-        reference = 'test3/test4'
-        target = '/test1/test3/test4'
-
-        base_parts = urlsplit(base)
-        reference_parts = urlsplit(reference)
-
-        self.assertEqual(target, _merge_path(base_parts, reference_parts))
-
     def test_process_rfc_3986(self):
-        base = urlsplit('http://a/b/c/d;p?q')
+        base = 'http://a/b/c/d;p?q'
         cases = {
             'g:h': 'g:h',
             'g': 'http://a/b/c/g',
@@ -67,4 +47,4 @@ class TestPath(unittest.TestCase):
 
         for k in cases:
             with self.subTest():
-                self.assertEqual(cases[k], _process_reference_url(base, urlsplit(k)), 'case=%s' % k)
+                self.assertEqual(cases[k], _process_reference_url(base, k), 'case=%s' % k)

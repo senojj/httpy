@@ -94,20 +94,20 @@ def _remove_dot_segments(path: str) -> str:
             if tokens[pos] == '/' and pos > 0:
                 break
             pos = pos + 1
-        buf = tokens[:pos+1]
+        buf = tokens[:pos + 1]
         segment = ''.join(buf)
         if segment == '../' or segment == './':
-            del tokens[:pos+1]
+            del tokens[:pos + 1]
         elif segment == '/./' or segment == '/.':
-            del tokens[:pos+1]
+            del tokens[:pos + 1]
             tokens.insert(0, '/')
         elif segment == '/../' or segment == '/..':
-            del tokens[:pos+1]
+            del tokens[:pos + 1]
             tokens.insert(0, '/')
             if len(output) > 0:
                 _strip_segment(output)
         elif segment == '..' or segment == '.':
-            del tokens[:pos+1]
+            del tokens[:pos + 1]
         else:
             output.extend(buf[:pos])
             del tokens[:pos]
@@ -115,37 +115,33 @@ def _remove_dot_segments(path: str) -> str:
     return ''.join(output)
 
 
-def _merge_path(base_parts: SplitResult, reference_parts: SplitResult) -> str:
-    if base_parts.netloc != '' and base_parts.path == '':
-        return '/' + reference_parts.path
+def _process_reference_url(base: str, reference: str) -> str:
+    b_scheme, b_netloc, b_path, b_query, b_fragment = urlsplit(base)
+    scheme, netloc, path, query, fragment = urlsplit(reference)
+
+    if scheme != '':
+        path = _remove_dot_segments(path)
     else:
-        return base_parts.path[0:(base_parts.path.rfind('/') + 1)] + reference_parts.path
-
-
-def _process_reference_url(base_parts: SplitResult, reference_parts: SplitResult) -> str:
-    target_parts = reference_parts
-
-    if reference_parts.scheme != '':
-        target_parts = target_parts._replace(path=_remove_dot_segments(reference_parts.path))
-        return urlunsplit(target_parts)
-    else:
-        if reference_parts.netloc != '':
-            target_parts = target_parts._replace(path=_remove_dot_segments(reference_parts.path))
+        if netloc != '':
+            path = _remove_dot_segments(path)
         else:
-            if reference_parts.path == '':
-                target_parts = target_parts._replace(path=base_parts.path)
-                if reference_parts.query == '':
-                    target_parts = target_parts._replace(query=base_parts.query)
+            if path == '':
+                path = b_path
+                if query == '':
+                    query = b_query
             else:
-                if reference_parts.path.find('/') == 0:
-                    target_parts = target_parts._replace(path=_remove_dot_segments(reference_parts.path))
+                if path[0] == '/':
+                    path = _remove_dot_segments(path)
                 else:
-                    merged_path = _merge_path(base_parts, reference_parts)
-                    target_parts = target_parts._replace(path=_remove_dot_segments(merged_path))
-            target_parts = target_parts._replace(netloc=base_parts.netloc)
-        target_parts = target_parts._replace(scheme=base_parts.scheme)
+                    if b_netloc != '' and b_path == '':
+                        merged_path = '/' + path
+                    else:
+                        merged_path = b_path[:b_path.rfind('/') + 1] + path
+                    path = _remove_dot_segments(merged_path)
+            netloc = b_netloc
+        scheme = b_scheme
 
-    return urlunsplit(target_parts)
+    return urlunsplit((scheme, netloc, path, query, fragment))
 
 
 class Header:
@@ -342,9 +338,7 @@ class HttpClient:
         if location is None:
             raise ValueError('redirect specified but no location provided')
 
-        new_url_parts = urlsplit(location)
-
-        target_url = _process_reference_url(url_parts, new_url_parts)
+        target_url = _process_reference_url(urlunsplit(url_parts), location)
 
         method = request.get_method()
 
