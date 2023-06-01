@@ -66,4 +66,5 @@ class TestPath(unittest.TestCase):
         }
 
         for k in cases:
-            self.assertEqual(cases[k], _process_reference_url(base, urlsplit(k)), 'case=%s' % k)
+            with self.subTest():
+                self.assertEqual(cases[k], _process_reference_url(base, urlsplit(k)), 'case=%s' % k)
