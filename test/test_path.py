@@ -42,9 +42,27 @@ class TestPath(unittest.TestCase):
             '../g': 'http://a/b/g',
             '../..': 'http://a/',
             '../../': 'http://a/',
-            '../../g': 'http://a/g'
+            '../../g': 'http://a/g',
+            '../../../g': 'http://a/g',
+            '../../../../g': 'http://a/g',
+            '/./g': 'http://a/g',
+            '/../g': 'http://a/g',
+            'g.': 'http://a/b/c/g.',
+            '.g': 'http://a/b/c/.g',
+            'g..': 'http://a/b/c/g..',
+            '..g': 'http://a/b/c/..g',
+            './../g': 'http://a/b/g',
+            './g/.': 'http://a/b/c/g/',
+            'g/./h': 'http://a/b/c/g/h',
+            'g/../h': 'http://a/b/c/h',
+            'g;x=1/./y': 'http://a/b/c/g;x=1/y',
+            'g;x=1/../y': 'http://a/b/c/y',
+            'g?y/./x': 'http://a/b/c/g?y/./x',
+            'g?y/../x': 'http://a/b/c/g?y/../x',
+            'g#s/./x': 'http://a/b/c/g#s/./x',
+            'g#s/../x': 'http://a/b/c/g#s/../x'
         }
 
         for k in cases:
-            with self.subTest():
+            with self.subTest(i=k):
                 self.assertEqual(cases[k], _process_reference_url(base, k), 'case=%s' % k)

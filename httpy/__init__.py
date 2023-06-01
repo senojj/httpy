@@ -134,10 +134,10 @@ def _process_reference_url(base: str, reference: str) -> str:
                     path = _remove_dot_segments(path)
                 else:
                     if b_netloc != '' and b_path == '':
-                        merged_path = '/' + path
+                        path = '/' + path
                     else:
-                        merged_path = b_path[:b_path.rfind('/') + 1] + path
-                    path = _remove_dot_segments(merged_path)
+                        path = b_path[:b_path.rfind('/') + 1] + path
+                    path = _remove_dot_segments(path)
             netloc = b_netloc
         scheme = b_scheme
 
