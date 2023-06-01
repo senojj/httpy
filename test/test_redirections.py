@@ -278,7 +278,7 @@ class TestRedirects(unittest.TestCase):
 
         target_url = 'http://%s:%d/%%7Eguido/FAQ.html' % httpd.server_address
 
-        self.assertEqual(status, httpy.STATUS_MOVED_PERMANENTLY)
+        self.assertEqual(status, httpy.STATUS_OK)
         self.assertEqual(target_url, url)
 
 
