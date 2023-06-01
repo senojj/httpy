@@ -74,45 +74,52 @@ SCHEME_HTTPS = 'https'
 DEFAULT_SCHEME = SCHEME_HTTP
 
 
+def _strip_segment(ls: List[str]):
+    i = len(ls) - 1
+
+    while i >= 0:
+        item = ls.pop()
+        if item == '/':
+            break
+        i = i - 1
+
+
 def _remove_dot_segments(path: str) -> str:
-    reference = list(path)
-    reference.reverse()
+    tokens = list(path)
     output = []
-    buf = []
-    tpos = 0
-    spos = 0
 
-    def evaluate_segment():
+    while len(tokens) > 0:
+        pos = 0
+        while pos < len(tokens):
+            if tokens[pos] == '/' and pos > 0:
+                break
+            pos = pos + 1
+        buf = tokens[:pos+1]
         segment = ''.join(buf)
-        if segment == '..':
-            if len(output) > 0 and spos > 0:
-                output.pop()
-        elif segment == '.':
-            pass
+        if segment == '../' or segment == './':
+            del tokens[:pos+1]
+        elif segment == '/./' or segment == '/.':
+            del tokens[:pos+1]
+            tokens.insert(0, '/')
+        elif segment == '/../' or segment == '/..':
+            del tokens[:pos+1]
+            tokens.insert(0, '/')
+            if len(output) > 0:
+                _strip_segment(output)
+        elif segment == '..' or segment == '.':
+            del tokens[:pos+1]
         else:
-            output.append(segment)
-        buf.clear()
+            output.extend(buf[:pos])
+            del tokens[:pos]
 
-    while len(reference) > 0:
-        token = reference.pop()
-
-        if token == '/':
-            evaluate_segment()
-            spos = tpos
-        else:
-            buf.append(token)
-        tpos = tpos + 1
-
-    evaluate_segment()
-
-    return '/'.join(output)
+    return ''.join(output)
 
 
 def _merge_path(base_parts: SplitResult, reference_parts: SplitResult) -> str:
     if base_parts.netloc != '' and base_parts.path == '':
         return '/' + reference_parts.path
     else:
-        return base_parts.path[0:base_parts.path.rfind('/')] + reference_parts.path
+        return base_parts.path[0:(base_parts.path.rfind('/') + 1)] + reference_parts.path
 
 
 def _process_reference_url(base_parts: SplitResult, reference_parts: SplitResult) -> str:
@@ -272,7 +279,6 @@ class HttpClient:
         return self._do(request, 1)
 
     def _do(self, request: HttpRequest, redirect_count: int) -> HttpResponse:
-        print(request.get_url())
         max_redirects = request.get_max_redirects()
 
         if max_redirects is not None and redirect_count > max_redirects:

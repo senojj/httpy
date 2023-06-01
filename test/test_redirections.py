@@ -13,7 +13,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             '/generic': generic,
             '/get-only': get_only,
             '/post-only': post_only,
-            '/ok-only': ok_only
+            '/ok-only': ok_only,
+            '/%7Eguido/Python.html': example,
+            '/%7Eguido/FAQ.html': ok_only
         }
         url_parts = urlsplit(self.path)
         handler = paths.get(url_parts.path)
@@ -66,6 +68,12 @@ def post_only(handler: RequestHandler):
 
 def ok_only(handler: RequestHandler):
     handler.send_response(httpy.STATUS_OK)
+    handler.end_headers()
+
+
+def example(handler: RequestHandler):
+    handler.send_response(httpy.STATUS_MOVED_PERMANENTLY)
+    handler.send_header('location', 'FAQ.html')
     handler.end_headers()
 
 
@@ -260,6 +268,18 @@ class TestRedirects(unittest.TestCase):
         self.assertEqual(status, httpy.STATUS_PERMANENT_REDIRECT)
         target_location = '/post-only'
         self.assertEqual(target_location, location)
+
+    def test_python_example(self):
+        request = httpy.HttpRequest(url='http://%s:%d/%%7Eguido/Python.html' % httpd.server_address)
+        response = client.do(request)
+        status = response.get_status()
+        url = response.get_url()
+        response.get_body().close()
+
+        target_url = 'http://%s:%d/%%7Eguido/FAQ.html' % httpd.server_address
+
+        self.assertEqual(status, httpy.STATUS_MOVED_PERMANENTLY)
+        self.assertEqual(target_url, url)
 
 
 if __name__ == '__main__':
