@@ -1,7 +1,7 @@
 import ssl
 from typing import Optional, Dict, List, Tuple
 from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
-from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs, SplitResult
+from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
 from email.message import Message
 
 _SCHEME_PORT = {
