@@ -75,42 +75,45 @@ DEFAULT_SCHEME = SCHEME_HTTP
 
 
 def _strip_segment(ls: List[str]):
-    i = len(ls) - 1
-
-    while i >= 0:
+    i = len(ls)
+    while i > 0:
+        i = i - 1
         if ls[i] == '/':
             break
-        i = i - 1
     del ls[i:]
 
 
 def _remove_dot_segments(path: str) -> str:
     tokens = list(path)
+    tokens.reverse()
     output = []
 
     while len(tokens) > 0:
-        pos = 0
-        while pos < len(tokens):
-            if tokens[pos] == '/' and pos > 0:
+        ctr = 0
+        pos = len(tokens)
+        buf = []
+        while pos > 0:
+            pos = pos - 1
+            buf.append(tokens[pos])
+            if tokens[pos] == '/' and ctr > 0:
                 break
-            pos = pos + 1
-        buf = tokens[:pos + 1]
+            ctr = ctr + 1
         segment = ''.join(buf)
         if segment == '../' or segment == './':
-            del tokens[:pos + 1]
+            del tokens[pos:]
         elif segment == '/./' or segment == '/.':
-            del tokens[:pos + 1]
-            tokens.insert(0, '/')
+            del tokens[pos:]
+            tokens.append('/')
         elif segment == '/../' or segment == '/..':
-            del tokens[:pos + 1]
-            tokens.insert(0, '/')
+            del tokens[pos:]
+            tokens.append('/')
             if len(output) > 0:
                 _strip_segment(output)
         elif segment == '..' or segment == '.':
-            del tokens[:pos + 1]
+            del tokens[pos:]
         else:
-            output.extend(buf[:pos])
-            del tokens[:pos]
+            output.extend(buf[:ctr])
+            del tokens[-ctr:]
 
     return ''.join(output)
 
