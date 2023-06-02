@@ -78,10 +78,10 @@ def _strip_segment(ls: List[str]):
     i = len(ls) - 1
 
     while i >= 0:
-        item = ls.pop()
-        if item == '/':
+        if ls[i] == '/':
             break
         i = i - 1
+    del ls[i:]
 
 
 def _remove_dot_segments(path: str) -> str:

@@ -1,5 +1,4 @@
 import unittest
-from urllib.parse import urlsplit
 
 from httpy import _remove_dot_segments, _process_reference_url
 
