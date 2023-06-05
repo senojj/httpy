@@ -87,33 +87,32 @@ def _remove_dot_segments(path: str) -> str:
     tokens = list(path)
     tokens.reverse()
     output = []
+    pos = len(tokens) - 1
 
-    while len(tokens) > 0:
+    while pos >= 0:
         ctr = 0
-        pos = len(tokens)
         buf = []
-        while pos > 0:
-            pos = pos - 1
+        while pos >= 0:
             buf.append(tokens[pos])
             if tokens[pos] == '/' and ctr > 0:
                 break
+            pos = pos - 1
             ctr = ctr + 1
         segment = ''.join(buf)
         if segment == '../' or segment == './':
-            del tokens[pos:]
+            pass
         elif segment == '/./' or segment == '/.':
-            del tokens[pos:]
-            tokens.append('/')
+            pos = max(pos, 0)
+            tokens[pos] = '/'
         elif segment == '/../' or segment == '/..':
-            del tokens[pos:]
-            tokens.append('/')
+            pos = max(pos, 0)
+            tokens[pos] = '/'
             if len(output) > 0:
                 _strip_segment(output)
         elif segment == '..' or segment == '.':
-            del tokens[pos:]
+            pass
         else:
             output.extend(buf[:ctr])
-            del tokens[-ctr:]
 
     return ''.join(output)
 
