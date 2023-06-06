@@ -88,10 +88,11 @@ def _remove_dot_segments(path: str) -> str:
     tokens.reverse()
     output = []
     pos = len(tokens) - 1
+    buf = []
 
     while pos >= 0:
         ctr = 0
-        buf = []
+        buf.clear()
         while pos >= 0:
             buf.append(tokens[pos])
             if tokens[pos] == '/' and ctr > 0:
