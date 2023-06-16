@@ -75,20 +75,16 @@ DEFAULT_SCHEME = SCHEME_HTTP
 
 
 def _strip_segment(ls: List[str]):
-    i = len(ls)
-    while i > 0:
+    i = len(ls) - 1
+    while (i > 0) and (not ls[i] == '/'):
         i = i - 1
-        if ls[i] == '/':
-            break
     del ls[i:]
 
 
 def _remove_dot_segments(path: str) -> str:
-    tokens = list(path)
+    tokens, output, buf = list(path), [], []
     tokens.reverse()
-    output = []
     pos = len(tokens) - 1
-    buf = []
 
     while pos >= 0:
         ctr = 0
@@ -108,8 +104,7 @@ def _remove_dot_segments(path: str) -> str:
         elif segment == '/../' or segment == '/..':
             pos = max(pos, 0)
             tokens[pos] = '/'
-            if len(output) > 0:
-                _strip_segment(output)
+            _strip_segment(output)
         elif segment == '..' or segment == '.':
             pass
         else:
