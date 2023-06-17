@@ -75,9 +75,8 @@ DEFAULT_SCHEME = SCHEME_HTTP
 
 
 def _remove_dot_segments(path: str) -> str:
-    tokens, output, buf = list(path), [], []
+    tokens, output, buf, pos = list(path), [], [], len(path) - 1
     tokens.reverse()
-    pos = len(tokens) - 1
 
     while pos >= 0:
         ctr = 0
