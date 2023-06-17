@@ -74,20 +74,6 @@ SCHEME_HTTPS = 'https'
 DEFAULT_SCHEME = SCHEME_HTTP
 
 
-class __Output:
-    def __init__(self):
-        self._buf = []
-
-    def append_segment(self, segment: str):
-        self._buf.append(segment)
-
-    def strip_segment(self):
-        self._buf = self._buf[0:-1]
-
-    def to_string(self) -> str:
-        return ''.join(self._buf)
-
-
 def _remove_dot_segments(path: str) -> str:
     tokens, output, buf = list(path), [], []
     tokens.reverse()
