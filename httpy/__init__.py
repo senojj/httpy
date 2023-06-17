@@ -74,11 +74,18 @@ SCHEME_HTTPS = 'https'
 DEFAULT_SCHEME = SCHEME_HTTP
 
 
-def _strip_segment(ls: List[str]):
-    i = len(ls) - 1
-    while (i > 0) and (not ls[i] == '/'):
-        i = i - 1
-    del ls[i:]
+class __Output:
+    def __init__(self):
+        self._buf = []
+
+    def append_segment(self, segment: str):
+        self._buf.append(segment)
+
+    def strip_segment(self):
+        self._buf = self._buf[0:-1]
+
+    def to_string(self) -> str:
+        return ''.join(self._buf)
 
 
 def _remove_dot_segments(path: str) -> str:
@@ -104,11 +111,11 @@ def _remove_dot_segments(path: str) -> str:
         elif segment == '/../' or segment == '/..':
             pos = max(pos, 0)
             tokens[pos] = '/'
-            _strip_segment(output)
+            output = output[0:-1]
         elif segment == '..' or segment == '.':
             pass
         else:
-            output.extend(buf[:ctr])
+            output.append(''.join(buf[:ctr]))
 
     return ''.join(output)
 
