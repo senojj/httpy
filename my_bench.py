@@ -1,10 +1,10 @@
-from httpy import _process_reference_url
+from httpy import url_transform_reference
 
 base = 'http://a/b/c/d;p?q'
 reference = '../../g'
 
 def test():
-    _process_reference_url(base, reference)
+    url_transform_reference(base, reference)
 
 if __name__ == '__main__':
     import timeit

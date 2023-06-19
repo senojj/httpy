@@ -1,6 +1,6 @@
 import unittest
 
-from httpy import _remove_dot_segments, _process_reference_url
+from httpy import url_remove_dot_segments, url_transform_reference
 
 
 class TestPath(unittest.TestCase):
@@ -8,13 +8,13 @@ class TestPath(unittest.TestCase):
         reference = '/a/b/c/./../../g'
         target = '/a/g'
 
-        self.assertEqual(target, _remove_dot_segments(reference))
+        self.assertEqual(target, url_remove_dot_segments(reference))
 
     def test_dot_segments_leading_character(self):
         reference = 'mid/content=5/../6'
         target = 'mid/6'
 
-        self.assertEqual(target, _remove_dot_segments(reference))
+        self.assertEqual(target, url_remove_dot_segments(reference))
 
     def test_process_rfc_3986(self):
         base = 'http://a/b/c/d;p?q'
@@ -64,4 +64,4 @@ class TestPath(unittest.TestCase):
 
         for k in cases:
             with self.subTest(i=k):
-                self.assertEqual(cases[k], _process_reference_url(base, k), 'case=%s' % k)
+                self.assertEqual(cases[k], url_transform_reference(base, k), 'case=%s' % k)

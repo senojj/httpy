@@ -74,7 +74,7 @@ SCHEME_HTTPS = 'https'
 DEFAULT_SCHEME = SCHEME_HTTP
 
 
-def _remove_dot_segments(path: str) -> str:
+def url_remove_dot_segments(path: str) -> str:
     tokens, output, buf, pos = list(path), [], [], len(path) - 1
     tokens.reverse()
 
@@ -105,15 +105,15 @@ def _remove_dot_segments(path: str) -> str:
     return ''.join(output)
 
 
-def _process_reference_url(base: str, reference: str) -> str:
+def url_transform_reference(base: str, reference: str) -> str:
     b_scheme, b_netloc, b_path, b_query, b_fragment = urlsplit(base)
     scheme, netloc, path, query, fragment = urlsplit(reference)
 
     if scheme != '':
-        path = _remove_dot_segments(path)
+        path = url_remove_dot_segments(path)
     else:
         if netloc != '':
-            path = _remove_dot_segments(path)
+            path = url_remove_dot_segments(path)
         else:
             if path == '':
                 path = b_path
@@ -121,13 +121,13 @@ def _process_reference_url(base: str, reference: str) -> str:
                     query = b_query
             else:
                 if path[0] == '/':
-                    path = _remove_dot_segments(path)
+                    path = url_remove_dot_segments(path)
                 else:
                     if b_netloc != '' and b_path == '':
                         path = '/' + path
                     else:
                         path = b_path[:b_path.rfind('/') + 1] + path
-                    path = _remove_dot_segments(path)
+                    path = url_remove_dot_segments(path)
             netloc = b_netloc
         scheme = b_scheme
 
@@ -328,7 +328,7 @@ class HttpClient:
         if location is None:
             raise ValueError('redirect specified but no location provided')
 
-        target_url = _process_reference_url(urlunsplit(url_parts), location)
+        target_url = url_transform_reference(urlunsplit(url_parts), location)
 
         method = request.get_method()
 
