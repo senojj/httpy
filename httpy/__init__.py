@@ -262,7 +262,7 @@ class HttpClient:
         return Pool(self._connections)
 
     def do(self, request: HttpRequest) -> HttpResponse:
-        return self._do(request, 1)
+        return self._do(request, 0)
 
     def _do(self, request: HttpRequest, redirect_count: int) -> HttpResponse:
         max_redirects = request.get_max_redirects()
