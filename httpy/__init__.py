@@ -250,9 +250,12 @@ class Pool:
 
 
 class HttpClient:
-    def __init__(self, context: Optional[ssl.SSLContext] = None):
+    def __init__(self, context: Optional[ssl.SSLContext] = None, default_tls: bool = False):
         self._connections = {}
         self._context = context
+        self._default_scheme = DEFAULT_SCHEME
+        if default_tls:
+            self._default_scheme = SCHEME_HTTPS
 
     def close(self):
         for _, connection in self._connections.items():
@@ -273,7 +276,7 @@ class HttpClient:
         url_parts = urlsplit(request.get_url())
 
         if url_parts.scheme.strip() == '':
-            url_parts = url_parts._replace(scheme=DEFAULT_SCHEME)
+            url_parts = url_parts._replace(scheme=self._default_scheme)
 
         port = url_parts.port
 
