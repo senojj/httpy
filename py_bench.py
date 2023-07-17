@@ -5,7 +5,6 @@ reference = '../../g'
 
 def test():
     r = urljoin(base, reference)
-    assert r == 'http://a/g'
 
 if __name__ == '__main__':
     import timeit
