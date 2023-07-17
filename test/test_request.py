@@ -13,3 +13,12 @@ class TestPath(unittest.TestCase):
         for k in cases:
             with self.subTest(i=k):
                 self.assertEqual(k, HttpRequest(k).get_url(), 'case=%s' % k)
+
+    def test_url_parameters(self):
+        cases = [
+            "test.com?t=1%20%2B%201%20%3D%202"
+        ]
+
+        for k in cases:
+            with self.subTest(i=k):
+                self.assertEqual(k, HttpRequest("test.com", parameters={"t": ["1 + 1 = 2"]}).get_url(), 'case=%s' % k)
