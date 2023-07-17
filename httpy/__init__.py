@@ -1,7 +1,7 @@
 import ssl
 from typing import Optional, Dict, List, Tuple
 from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
-from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
+from urllib.parse import urlsplit, urlunsplit, urlencode, quote, parse_qs
 from email.message import Message
 
 _SCHEME_PORT = {
@@ -71,7 +71,7 @@ STATUS_HTTP_VERSION_NOT_SUPPORTED = 505
 
 SCHEME_HTTP = 'http'
 SCHEME_HTTPS = 'https'
-DEFAULT_SCHEME = SCHEME_HTTP
+_DEFAULT_SCHEME = SCHEME_HTTP
 
 
 def url_remove_dot_segments(path: str) -> str:
@@ -171,7 +171,7 @@ class HttpRequest:
         if parameters is not None:
             qs.update(parameters)
 
-        parts = parts._replace(query=urlencode(qs, doseq=True))
+        parts = parts._replace(query=urlencode(qs, doseq=True, quote_via=quote))
         self._url = urlunsplit(parts)
         self._method = method
         self._headers = headers
@@ -253,7 +253,7 @@ class HttpClient:
     def __init__(self, context: Optional[ssl.SSLContext] = None, default_tls: bool = False):
         self._connections = {}
         self._context = context
-        self._default_scheme = DEFAULT_SCHEME
+        self._default_scheme = _DEFAULT_SCHEME
         if default_tls:
             self._default_scheme = SCHEME_HTTPS
 
