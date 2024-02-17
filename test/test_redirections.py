@@ -1,6 +1,6 @@
 import ssl
 import unittest
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from urllib.parse import urlsplit
 
@@ -77,13 +77,13 @@ def example(handler: RequestHandler):
     handler.end_headers()
 
 
-httpd = HTTPServer(('127.0.0.1', 8080), RequestHandler)
-httpsd = HTTPServer(('127.0.0.1', 4443), RequestHandler)
+httpd = ThreadingHTTPServer(('127.0.0.1', 8080), RequestHandler)
+httpsd = ThreadingHTTPServer(('127.0.0.1', 4443), RequestHandler)
 
-httpsd.socket = ssl.wrap_socket(httpsd.socket,
-                                keyfile='./localhost.key',
-                                certfile='./localhost.crt',
-                                server_side=True)
+server_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+server_context.load_cert_chain(certfile='./localhost.crt', keyfile='./localhost.key')
+
+httpsd.socket = server_context.wrap_socket(httpsd.socket, server_side=True)
 
 p1 = Thread(target=httpd.serve_forever)
 p2 = Thread(target=httpsd.serve_forever)
@@ -92,11 +92,11 @@ p2.daemon = True
 p1.start()
 p2.start()
 
-ctx_no_check = ssl.create_default_context()
-ctx_no_check.check_hostname = False
-ctx_no_check.verify_mode = ssl.CERT_NONE
+client_context = ssl.create_default_context()
+client_context.check_hostname = False
+client_context.verify_mode = ssl.CERT_NONE
 
-client = httpy.HttpClient(context=ctx_no_check)
+client = httpy.HttpClient(context=client_context)
 
 
 def tearDownModule():
