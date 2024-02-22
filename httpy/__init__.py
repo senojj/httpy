@@ -1,8 +1,13 @@
+import io
 import ssl
+import socket
 from typing import Optional, Dict, List, Tuple
 from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
-from urllib.parse import urlsplit, urlunsplit, urlencode, quote, parse_qs
+from urllib.parse import urlsplit, urlunsplit, urlencode, quote, parse_qsl
 from email.message import Message
+
+VERSION_HTTP_1_0 = "HTTP/1.0"
+VERSION_HTTP_1_1 = "HTTP/1.1"
 
 _SCHEME_PORT = {
     'http': 80,
@@ -73,6 +78,52 @@ SCHEME_HTTP = 'http'
 SCHEME_HTTPS = 'https'
 _DEFAULT_SCHEME = SCHEME_HTTP
 
+_HEADER_FIELD_NAME_CHARACTER_MAP = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b'-', 0, 0, b'0', b'1', b'2', b'3', b'4', b'5', b'6',
+    b'7', b'8', b'9', 0, 0, 0, 0, 0, 0, 0, b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I',
+    b'J', b'K', b'L', b'M', b'N', b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y',
+    b'Z', 0, 0, 0, 0, b'_', 0, b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k',
+    b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z', 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0,
+]
+
+
+def parse_header_field_name(name: str) -> bytes:
+    ba = str.encode(name)
+    for b in ba:
+        if _HEADER_FIELD_NAME_CHARACTER_MAP[b] == 0:
+            raise ValueError(f'Invalid header field name: {name}')
+    return ba
+
+
+_HEADER_FIELD_VALUE_CHARACTER_MAP = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, b'\t', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, b' ', b'!', b'"', b'#', b'$', b'%', b'&', b'\'', b'(', b')', b'*', b'+', b',', b'-',
+    b'.', b'/', b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b':', b';', b'<', b'=',
+    b'>', b'?', b'@', b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M',
+    b'N', b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'[', b'\\',
+    b']', b'^', b'_', b'`', b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l',
+    b'm', b'n', b'o', b'p', b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z', b'{', b'|',
+    b'}', b'~', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+]
+
+
+def parse_header_field_value(value: str) -> bytes:
+    ba = str.encode(value)
+    for b in ba:
+        if _HEADER_FIELD_VALUE_CHARACTER_MAP[b] == 0:
+            raise ValueError(f'Invalid header field value: {value}')
+    return ba
+
 
 def url_remove_dot_segments(path: str) -> str:
     tokens, output, buf, pos = list(path), [], [], len(path) - 1
@@ -131,7 +182,7 @@ def url_transform_reference(base: str, reference: str) -> str:
             netloc = b_netloc
         scheme = b_scheme
 
-    return urlunsplit((scheme, netloc, path, query, fragment))
+    return str(urlunsplit((scheme, netloc, path, query, fragment)))
 
 
 class Header:
@@ -156,50 +207,75 @@ class Body:
         return self._response.close()
 
 
+_MAX_READ_SZ = 1024
+
+
 class HttpRequest:
     def __init__(self,
-                 url: str,
-                 method: Optional[str] = None,
-                 headers: Optional[Dict[str, str]] = None,
-                 parameters: Optional[Dict[str, List[str]]] = None,
-                 body: Optional[bytes] = None,
-                 follow_redirects: bool = True,
-                 max_redirects: Optional[int] = 10):
-        parts = urlsplit(url)
-        qs = parse_qs(parts.query)
+                 method: str,
+                 path: str,
+                 header: List[Tuple[str, str]],
+                 body: io.RawIOBase = io.BytesIO(),
+                 version: str = VERSION_HTTP_1_1):
+        self.method = method
+        self.path = path
+        self.header = header
+        self.body = body
+        self.version = version
 
-        if parameters is not None:
-            qs.update(parameters)
+    def write_to(self, b: io.RawIOBase):
+        chunked = False
+        content_length = 0
+        request_line = str.encode(f'{self.method} {self.path} HTTP/1.1\r\n')
+        header = bytearray(request_line)
+        for k, v in self.header:
+            match k.lower():
+                case 'content-length':
+                    if v.isnumeric():
+                        content_length = int(v)
+                    else:
+                        raise ValueError(f'invalid content-length value: {v}')
+                case 'transfer-encoding':
+                    if v.lower() == 'chunked':
+                        chunked = True
+            name = parse_header_field_name(k)
+            header.extend(name)
+            header.extend(b'=')
+            value = parse_header_field_value(v)
+            header.extend(value)
+            header.extend(b'\r\n')
+        header.extend(b'\r\n')
+        b_written = b.write(header)
+        if b_written < len(header):
+            raise BlockingIOError()
 
-        parts = parts._replace(query=urlencode(qs, doseq=True, quote_via=quote))
-        self._url = urlunsplit(parts)
-        self._method = method
-        self._headers = headers
-        self._parameters = parameters
-        self._body = body
-        self._follow_redirects = follow_redirects
-        self._max_redirects = max_redirects
-
-    def get_url(self) -> str:
-        return self._url
-
-    def get_method(self) -> Optional[str]:
-        return self._method
-
-    def get_headers(self) -> Optional[Dict[str, str]]:
-        return self._headers
-
-    def get_parameters(self) -> Optional[Dict[str, List[str]]]:
-        return self._parameters
-
-    def get_body(self) -> Optional[bytes]:
-        return self._body
-
-    def should_follow_redirects(self) -> bool:
-        return self._follow_redirects
-
-    def get_max_redirects(self) -> Optional[int]:
-        return self._max_redirects
+        b_read = 0
+        if not chunked:
+            while b_read < content_length:
+                buf_sz = min(_MAX_READ_SZ, content_length - b_read)
+                bts = self.body.read(buf_sz)
+                b_read += len(bts)
+                b_written = b.write(bts)
+                if b_written < b_read:
+                    raise BlockingIOError()
+        else:
+            bts = self.body.read(_MAX_READ_SZ)
+            while len(bts) > 0:
+                ba = bytearray(str(len(bts)).encode())
+                ba.extend(b'\r\n')
+                b_written = b.write(ba)
+                if b_written < len(ba):
+                    raise BlockingIOError()
+                ba = bytearray(bts)
+                ba.extend(b'\r\n')
+                b_written = b.write(ba)
+                if b_written < len(ba):
+                    raise BlockingIOError()
+                bts = self.body.read(_MAX_READ_SZ)
+            ba = bytearray(b'0\r\n\r\n')
+            b_written = b.write(ba)
+            if b_written < len(ba):
+                raise BlockingIOError()
 
 
 class HttpResponse:
@@ -231,38 +307,34 @@ class HttpResponse:
         return self._body
 
 
-class Pool:
-    def __init__(self, connections: Dict[Tuple[str, str, int], HTTPConnection]):
-        self._connections = connections
-
-    def clear(self):
-        for item in self._connections:
-            self._connections[item].close()
-
-        self._connections.clear()
-
-    def remove(self, scheme: str, host: str, port: int):
-        item = self._connections.get((scheme, host, port))
-
-        if item is not None:
-            item.close()
-            del self._connections[(scheme, host, port)]
+_CS_AWAIT_REQUEST = 1
 
 
+class HttpConnection:
+    def __init__(self, sock: socket.socket):
+        self._socket = sock
+
+    def send_request(self, request: HttpRequest):
+        return
+
+
+'''
 class HttpClient:
-    def __init__(self, context: Optional[ssl.SSLContext] = None, default_tls: bool = False):
-        self._connections = {}
+    def __init__(self,
+                 context: Optional[ssl.SSLContext] = None,
+                 default_tls: bool = False,
+                 pool: Optional[Pool] = None):
+        if pool is None:
+            self._connections = Pool()
+        else:
+            self._connections = pool
         self._context = context
         self._default_scheme = _DEFAULT_SCHEME
         if default_tls:
             self._default_scheme = SCHEME_HTTPS
 
     def close(self):
-        for _, connection in self._connections.items():
-            connection.close()
-
-    def get_pool(self) -> Pool:
-        return Pool(self._connections)
+        self._connections.clear()
 
     def do(self, request: HttpRequest) -> HttpResponse:
         return self._do(request, 0)
@@ -285,7 +357,7 @@ class HttpClient:
 
         scheme = url_parts.scheme
         host = url_parts.hostname
-        connection = self._connections.get((scheme, host, port))
+        connection = self._connections.get(host, port)
 
         use_tls = url_parts.scheme == SCHEME_HTTPS
 
@@ -306,7 +378,7 @@ class HttpClient:
         if method is None:
             method = METHOD_GET
 
-        request_url = urlunsplit(url_parts)
+        request_url = str(urlunsplit(url_parts))
 
         connection.request(method,
                            request_url,
@@ -331,7 +403,7 @@ class HttpClient:
         if location is None:
             raise ValueError('redirect specified but no location provided')
 
-        target_url = url_transform_reference(urlunsplit(url_parts), location)
+        target_url = url_transform_reference(str(urlunsplit(url_parts)), location)
 
         method = request.get_method()
 
@@ -344,3 +416,4 @@ class HttpClient:
                                        body=request.get_body())
 
         return self._do(redirect_request, redirect_count + 1)
+'''
