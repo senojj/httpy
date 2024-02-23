@@ -1,6 +1,6 @@
 import io
 import unittest
-from httpy import HttpRequest, _MAX_READ_SZ
+from httpy import HttpRequest
 
 
 class TestPath(unittest.TestCase):
