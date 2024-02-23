@@ -200,14 +200,16 @@ class HttpRequest:
                  path: str,
                  header: List[Tuple[str, str]],
                  body: Union[io.RawIOBase, io.BufferedIOBase],
+                 trailer: List[Tuple[str, str]],
                  version: str = VERSION_HTTP_1_1):
         self.method = method
         self.path = path
         self.header = header
         self.body = body
+        self.trailer = trailer
         self.version = version
 
-    def write_to(self, b: Union[io.RawIOBase, io.BufferedIOBase]):
+    def write_to(self, b: Union[io.RawIOBase, io.BufferedIOBase], read_sz: int = _MAX_READ_SZ):
         chunked = False
         content_length = 0
         request_line = str.encode(f'{self.method} {self.path} HTTP/1.1\r\n')
@@ -224,9 +226,13 @@ class HttpRequest:
                         chunked = True
             name = parse_header_field_name(k)
             header.extend(name)
-            header.extend(b'=')
+            header.extend(b': ')
             value = parse_header_field_value(v)
             header.extend(value)
+            header.extend(b'\r\n')
+        for k, v in self.trailer:
+            header.extend(b'Trailer: ')
+            header.extend(parse_header_field_name(k))
             header.extend(b'\r\n')
         header.extend(b'\r\n')
         b_written = b.write(header)
@@ -236,14 +242,14 @@ class HttpRequest:
         b_read = 0
         if not chunked:
             while b_read < content_length:
-                buf_sz = min(_MAX_READ_SZ, content_length - b_read)
+                buf_sz = min(read_sz, content_length - b_read)
                 bts = self.body.read(buf_sz)
                 b_read += len(bts)
                 b_written = b.write(bts)
                 if b_written < b_read:
                     raise BlockingIOError()
         else:
-            bts = self.body.read(_MAX_READ_SZ)
+            bts = self.body.read(read_sz)
             while len(bts) > 0:
                 ba = bytearray(str(len(bts)).encode())
                 ba.extend(b'\r\n')
@@ -255,8 +261,14 @@ class HttpRequest:
                 b_written = b.write(ba)
                 if b_written < len(ba):
                     raise BlockingIOError()
-                bts = self.body.read(_MAX_READ_SZ)
-            ba = bytearray(b'0\r\n\r\n')
+                bts = self.body.read(read_sz)
+            ba = bytearray(b'0\r\n')
+            for k, v in self.trailer:
+                ba.extend(parse_header_field_name(k))
+                ba.extend(b': ')
+                ba.extend(parse_header_field_value(v))
+                ba.extend(b'\r\n')
+            ba.extend(b'\r\n')
             b_written = b.write(ba)
             if b_written < len(ba):
                 raise BlockingIOError()
