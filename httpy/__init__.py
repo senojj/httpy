@@ -1,9 +1,7 @@
 import io
-import ssl
 import socket
-from typing import Optional, Dict, List, Tuple
-from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
-from urllib.parse import urlsplit, urlunsplit, urlencode, quote, parse_qsl
+from typing import Optional, List, Tuple, Union
+from urllib.parse import urlsplit, urlunsplit
 from email.message import Message
 
 VERSION_HTTP_1_0 = "HTTP/1.0"
@@ -193,20 +191,6 @@ class Header:
         return self._message.get(name)
 
 
-class Body:
-    def __init__(self, response: HTTPResponse):
-        self._response = response
-
-    def read(self, amt: int) -> bytes:
-        return self._response.read(amt)
-
-    def read_into(self, b: bytearray) -> int:
-        return self._response.readinto(b)
-
-    def close(self):
-        return self._response.close()
-
-
 _MAX_READ_SZ = 1024
 
 
@@ -215,7 +199,7 @@ class HttpRequest:
                  method: str,
                  path: str,
                  header: List[Tuple[str, str]],
-                 body: io.RawIOBase = io.BytesIO(),
+                 body: Union[io.RawIOBase, io.BufferedIOBase],
                  version: str = VERSION_HTTP_1_1):
         self.method = method
         self.path = path
@@ -223,7 +207,7 @@ class HttpRequest:
         self.body = body
         self.version = version
 
-    def write_to(self, b: io.RawIOBase):
+    def write_to(self, b: Union[io.RawIOBase, io.BufferedIOBase]):
         chunked = False
         content_length = 0
         request_line = str.encode(f'{self.method} {self.path} HTTP/1.1\r\n')
@@ -276,36 +260,6 @@ class HttpRequest:
             b_written = b.write(ba)
             if b_written < len(ba):
                 raise BlockingIOError()
-
-
-class HttpResponse:
-    def __init__(self,
-                 url: str,
-                 status: int,
-                 version: int,
-                 headers: Header,
-                 body: Body):
-        self._url = url
-        self._status = status
-        self._version = version
-        self._headers = headers
-        self._body = body
-
-    def get_url(self) -> str:
-        return self._url
-
-    def get_status(self) -> int:
-        return self._status
-
-    def get_version(self) -> int:
-        return self._version
-
-    def get_headers(self) -> Header:
-        return self._headers
-
-    def get_body(self) -> Body:
-        return self._body
-
 
 _CS_AWAIT_REQUEST = 1
 
