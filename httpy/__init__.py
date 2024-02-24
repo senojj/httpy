@@ -194,12 +194,40 @@ class Header:
 _MAX_READ_SZ = 1024
 
 
+class Body:
+    def __init__(self, r: io.BufferedReader = io.BufferedReader(io.BytesIO()), size: int = 0):
+        self._reader = r
+        self._pos = 0
+        self._size = size
+
+    def __len__(self):
+        return self._size
+
+    def read(self, buffer: bytearray) -> int:
+        amt = min(len(buffer), self._size - self._pos)
+        if amt == 0:
+            return 0
+        b = self._reader.read(amt)
+        b_read = len(b)
+        self._pos += b_read
+        buffer[0:b_read] = b
+        return b_read
+
+    def read_all(self) -> bytes:
+        result = bytearray(self._size)
+        buffer = bytearray(_MAX_READ_SZ)
+        b_read = self.read(buffer)
+        while b_read > 0:
+            result.extend(buffer[0:b_read])
+        return result
+
+
 class HttpRequest:
     def __init__(self,
                  method: str,
                  path: str,
                  header: List[Tuple[str, str]],
-                 body: Union[io.RawIOBase, io.BufferedIOBase],
+                 body: Body,
                  trailer: List[Tuple[str, str]],
                  version: str = VERSION_HTTP_1_1):
         self.method = method
@@ -209,18 +237,14 @@ class HttpRequest:
         self.trailer = trailer
         self.version = version
 
-    def write_to(self, b: Union[io.RawIOBase, io.BufferedIOBase], read_sz: int = _MAX_READ_SZ):
+    def write_to(self, b: io.BufferedWriter, read_sz: int = _MAX_READ_SZ):
         chunked = False
         content_length = 0
         request_line = str.encode(f'{self.method} {self.path} HTTP/1.1\r\n')
         header = bytearray(request_line)
+        header.extend(f'Content-Length: {len(self.body)}\r\n'.encode())
         for k, v in self.header:
             match k.lower():
-                case 'content-length':
-                    if v.isnumeric():
-                        content_length = int(v)
-                    else:
-                        raise ValueError(f'invalid content-length value: {v}')
                 case 'transfer-encoding':
                     if v.lower() == 'chunked':
                         chunked = True
@@ -239,29 +263,27 @@ class HttpRequest:
         if b_written < len(header):
             raise BlockingIOError()
 
-        b_read = 0
+        buffer = bytearray(read_sz)
+        b_read = self.body.read(buffer)
         if not chunked:
-            while b_read < content_length:
-                buf_sz = min(read_sz, content_length - b_read)
-                bts = self.body.read(buf_sz)
-                b_read += len(bts)
-                b_written = b.write(bts)
+            while b_read > 0:
+                b_written = b.write(buffer[0:b_read])
                 if b_written < b_read:
                     raise BlockingIOError()
+                b_read = self.body.read(buffer)
         else:
-            bts = self.body.read(read_sz)
-            while len(bts) > 0:
-                ba = bytearray(str(len(bts)).encode())
+            while b_read > 0:
+                ba = bytearray(str(b_read).encode())
                 ba.extend(b'\r\n')
                 b_written = b.write(ba)
                 if b_written < len(ba):
                     raise BlockingIOError()
-                ba = bytearray(bts)
+                ba = bytearray(buffer[0:b_read])
                 ba.extend(b'\r\n')
                 b_written = b.write(ba)
                 if b_written < len(ba):
                     raise BlockingIOError()
-                bts = self.body.read(read_sz)
+                b_read = self.body.read(buffer)
             ba = bytearray(b'0\r\n')
             for k, v in self.trailer:
                 ba.extend(parse_header_field_name(k))
@@ -272,6 +294,30 @@ class HttpRequest:
             b_written = b.write(ba)
             if b_written < len(ba):
                 raise BlockingIOError()
+
+
+def _read_line_from(b: io.BufferedReader, max_line_sz: int = 1024) -> bytes:
+    buf = b.readline(max_line_sz)
+    if buf[-2:] != b'\r\n':
+        raise BlockingIOError()
+    return buf[:-2]
+
+
+def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_cnt: int = 100) -> HttpRequest:
+    request_line = _read_line_from(b, max_line_sz)
+    request_line_parts = request_line.decode().split(' ', 2)
+    method = request_line_parts[0]
+    path = request_line_parts[1]
+    version = request_line_parts[2]
+    field_cnt = 0
+    line = _read_line_from(b, max_line_sz).decode()
+    while line != '/r/n':
+        if field_cnt > max_field_cnt:
+            raise BlockingIOError()
+        line = _read_line_from(b, max_line_sz).decode()
+        field_cnt += 1
+    return HttpRequest(method, path, [], Body(b, 0), [], version)
+
 
 _CS_AWAIT_REQUEST = 1
 
