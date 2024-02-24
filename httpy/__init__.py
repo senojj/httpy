@@ -239,7 +239,6 @@ class HttpRequest:
 
     def write_to(self, b: io.BufferedWriter, read_sz: int = _MAX_READ_SZ):
         chunked = False
-        content_length = 0
         request_line = str.encode(f'{self.method} {self.path} HTTP/1.1\r\n')
         header = bytearray(request_line)
         header.extend(f'Content-Length: {len(self.body)}\r\n'.encode())
