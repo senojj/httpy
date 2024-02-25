@@ -26,7 +26,6 @@ class TestPath(unittest.TestCase):
         writer.flush()
         buf.seek(0)
         print(buf.read().decode())
-        return
 
     def test_body_reader(self):
         body = (

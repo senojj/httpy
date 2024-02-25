@@ -242,10 +242,13 @@ class StreamBodyReader(BodyReader):
         self._chunk = NoBodyReader()
 
     def _next_chunk(self):
-        line = _read_line_from(self._reader, _MAX_READ_SZ).decode()
-        if not line.isnumeric():
+        line = _read_line_from(self._reader, _MAX_READ_SZ)
+        while len(line) == 0:
+            line = _read_line_from(self._reader, _MAX_READ_SZ)
+        value = line.decode()
+        if not value.isnumeric():
             raise BlockingIOError(f"Invalid size: {line}")
-        amt = int(line)
+        amt = int(value)
         if amt == 0:
             self._chunk = None
         else:
