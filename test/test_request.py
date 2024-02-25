@@ -17,18 +17,12 @@ class TestPath(unittest.TestCase):
             method='GET',
             path='/hello',
             header=[('Transfer-Encoding', 'chunked')],
-            body=SizedBodyReader(io.BufferedReader(io.BytesIO(body)), len(body)),
+            body=io.BufferedReader(io.BytesIO(body)),
             trailer=[('Signature', 'arolighroaeigfhjarlkseiklgfhaoli')]
         )
         buf = io.BytesIO()
         writer = io.BufferedWriter(buf)
-        r.write_to(writer, 64)
+        r.write_to(writer)
         writer.flush()
         buf.seek(0)
-
-        req = read_request_from(buf)
-        print(req.method)
-        print(req.path)
-        print(req.version)
-        print(req.header)
-        print(req.body.read_all().decode())
+        print(buf.read().decode('utf-8'))

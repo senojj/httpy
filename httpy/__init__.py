@@ -210,6 +210,12 @@ class BodyReader:
             b_read = self.read(buffer)
         return result
 
+    def close(self):
+        buffer = bytearray(_MAX_READ_SZ)
+        b_read = self.read(buffer)
+        while b_read > 0:
+            b_read = self.read(buffer)
+
 
 class NoBodyReader(BodyReader):
     pass
@@ -264,12 +270,81 @@ class StreamBodyReader(BodyReader):
         return self.read(buffer)
 
 
+class BodyWriter:
+    def write(self, data: bytes) -> int:
+        return 0
+
+    def __len__(self):
+        return 0
+
+    def close(self):
+        pass
+
+
+class NoBodyWriter(BodyWriter):
+    pass
+
+
+class SizedBodyWriter(BodyWriter):
+    def __init__(self, w: io.BufferedWriter, size: int):
+        self._writer = w
+        self._size = size
+        self._pos = 0
+
+    def __len__(self):
+        return self._pos
+
+    def write(self, data: bytes) -> int:
+        if self._pos == self._size:
+            return 0
+        amt = min(len(data), self._size - self._pos)
+        b_written = self._writer.write(data[0:amt])
+        self._pos += b_written
+        return b_written
+
+    def close(self):
+        self._writer.flush()
+
+
+class StreamBodyWriter(BodyWriter):
+    def __init__(self, w: io.BufferedWriter, chunk_size: int):
+        self._writer = w
+        self._buffer = bytearray()
+        self._chunk_size = chunk_size
+        self._pos = 0
+
+    def __len__(self):
+        return self._pos
+
+    def write(self, data: bytes) -> int:
+        length = len(data)
+        self._buffer[self._pos:length] = data[0:]
+        self._pos += length
+        while self._pos >= self._chunk_size:
+            remainder = self._pos - self._chunk_size
+            chunk = self._buffer[0:self._chunk_size]
+            self._writer.write(f'{len(chunk)}\r\n'.encode())
+            self._writer.write(chunk)
+            self._writer.write(b'\r\n')
+            self._buffer[0:remainder] = self._buffer[self._chunk_size:remainder]
+            self._pos = remainder
+        return length
+
+    def close(self):
+        chunk = self._buffer[0:self._pos]
+        size = len(chunk)
+        self._writer.write(f'{size}\r\n'.encode())
+        self._writer.write(chunk)
+        self._writer.write(b'\r\n0\r\n')
+        self._writer.flush()
+
+
 class HttpRequest:
     def __init__(self,
                  method: str,
                  path: str,
                  header: List[Tuple[str, str]],
-                 body: BodyReader,
+                 body: io.BufferedReader,
                  trailer: List[Tuple[str, str]],
                  version: str = VERSION_HTTP_1_1):
         self.method = method
@@ -279,13 +354,17 @@ class HttpRequest:
         self.trailer = trailer
         self.version = version
 
-    def write_to(self, b: io.BufferedWriter, read_sz: int = _MAX_READ_SZ):
+    def write_to(self, b: io.BufferedWriter):
         chunked = False
-        request_line = str.encode(f'{self.method} {self.path} HTTP/1.1\r\n')
+        content_length = 0
+        request_line = str.encode(f'{self.method} {self.path} {self.version}\r\n')
         header = bytearray(request_line)
-        header.extend(f'Content-Length: {len(self.body)}\r\n'.encode())
         for k, v in self.header:
             match k.lower():
+                case 'content-length':
+                    if not v.isnumeric():
+                        raise BlockingIOError(f"Invalid content length value: {v}")
+                    content_length = int(v)
                 case 'transfer-encoding':
                     if v.lower() == 'chunked':
                         chunked = True
@@ -304,37 +383,20 @@ class HttpRequest:
         if b_written < len(header):
             raise BlockingIOError()
 
-        buffer = bytearray(read_sz)
-        b_read = self.body.read(buffer)
+        buffer = self.body.read(_MAX_READ_SZ)
+        b_read = len(buffer)
         if not chunked:
-            while b_read > 0:
-                b_written = b.write(buffer[0:b_read])
-                if b_written < b_read:
-                    raise BlockingIOError()
-                b_read = self.body.read(buffer)
+            body_writer = SizedBodyWriter(b, content_length)
         else:
-            while b_read > 0:
-                ba = bytearray(str(b_read).encode())
-                ba.extend(b'\r\n')
-                b_written = b.write(ba)
-                if b_written < len(ba):
-                    raise BlockingIOError()
-                ba = bytearray(buffer[0:b_read])
-                ba.extend(b'\r\n')
-                b_written = b.write(ba)
-                if b_written < len(ba):
-                    raise BlockingIOError()
-                b_read = self.body.read(buffer)
-            ba = bytearray(b'0\r\n')
-            for k, v in self.trailer:
-                ba.extend(parse_header_field_name(k))
-                ba.extend(b': ')
-                ba.extend(parse_header_field_value(v))
-                ba.extend(b'\r\n')
-            ba.extend(b'\r\n')
-            b_written = b.write(ba)
-            if b_written < len(ba):
-                raise BlockingIOError()
+            body_writer = StreamBodyWriter(b, 64)
+
+        while b_read > 0:
+            b_written = body_writer.write(buffer)
+            if b_written < b_read:
+                raise BlockingIOError("tried to write too much")
+            buffer = self.body.read(_MAX_READ_SZ)
+            b_read = len(buffer)
+        body_writer.close()
 
 
 def _read_line_from(b: io.BufferedReader, max_line_sz: int = 1024) -> bytes:
@@ -387,7 +449,8 @@ class HttpConnection:
         self._socket = sock
 
     def send_request(self, request: HttpRequest):
-        return
+        pass
+
 
 
 '''
