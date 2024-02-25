@@ -1,6 +1,6 @@
 import io
 import unittest
-from httpy import HttpRequest, SizedBodyReader, StreamBodyReader
+from httpy import HttpRequest, SizedBodyReader, StreamBodyReader, read_request_from
 
 
 class TestPath(unittest.TestCase):
@@ -25,26 +25,10 @@ class TestPath(unittest.TestCase):
         r.write_to(writer, 64)
         writer.flush()
         buf.seek(0)
-        print(buf.read().decode())
 
-    def test_body_reader(self):
-        body = (
-            b'64\r\n'
-            b'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do \r\n'
-            b'64\r\n'
-            b'eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut e\r\n'
-            b'64\r\n'
-            b'nim ad minim veniam, quis nostrud exercitation ullamco laboris n\r\n'
-            b'64\r\n'
-            b'isi ut aliquip ex ea commodo consequat. Duis aute irure dolor in\r\n'
-            b'64\r\n'
-            b' reprehenderit in voluptate velit esse cillum dolore eu fugiat n\r\n'
-            b'64\r\n'
-            b'ulla pariatur. Excepteur sint occaecat cupidatat non proident, s\r\n'
-            b'61\r\n'
-            b'unt in culpa qui officia deserunt mollit anim id est laborum.\r\n'
-            b'0\r\n')
-        buffer = io.BufferedReader(io.BytesIO(body))
-        reader = StreamBodyReader(buffer)
-        result = reader.read_all().decode()
-        print(result)
+        req = read_request_from(buf)
+        print(req.method)
+        print(req.path)
+        print(req.version)
+        print(req.header)
+        print(req.body.read_all().decode())

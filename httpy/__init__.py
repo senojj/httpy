@@ -297,7 +297,7 @@ class HttpRequest:
             header.extend(b'\r\n')
         for k, v in self.trailer:
             header.extend(b'Trailer: ')
-            header.extend(parse_header_field_name(k))
+            header.extend(parse_header_field_value(k))
             header.extend(b'\r\n')
         header.extend(b'\r\n')
         b_written = b.write(header)
@@ -351,13 +351,32 @@ def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_c
     path = request_line_parts[1]
     version = request_line_parts[2]
     field_cnt = 0
+    fields = []
+    content_length = 0
+    chunked = False
     line = _read_line_from(b, max_line_sz).decode()
-    while line != '/r/n':
+    while line != '':
         if field_cnt > max_field_cnt:
             raise BlockingIOError()
+        field_parts = line.split(':', 1)
+        name = parse_header_field_name(str.rstrip(field_parts[0])).decode()
+        value = parse_header_field_value(str.lstrip(field_parts[1])).decode()
+        match name.lower():
+            case 'content-length':
+                if not value.isnumeric():
+                    raise BlockingIOError("Invalid content length value")
+                content_length = int(value)
+            case 'transfer-encoding':
+                chunked = value.lower() == 'chunked'
+        fields.append((name, value))
         line = _read_line_from(b, max_line_sz).decode()
         field_cnt += 1
-    return HttpRequest(method, path, [], NoBodyReader(), [], version)
+    if not chunked:
+        body = SizedBodyReader(b, content_length)
+    else:
+        body = StreamBodyReader(b)
+
+    return HttpRequest(method, path, fields, body, [], version)
 
 
 _CS_AWAIT_REQUEST = 1
