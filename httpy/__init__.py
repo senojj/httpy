@@ -1,6 +1,6 @@
 import io
 import socket
-from typing import Optional, List, Tuple, Union
+from typing import Optional, List, Tuple
 from urllib.parse import urlsplit, urlunsplit
 from email.message import Message
 
@@ -194,8 +194,29 @@ class Header:
 _MAX_READ_SZ = 1024
 
 
-class Body:
-    def __init__(self, r: io.BufferedReader = io.BufferedReader(io.BytesIO()), size: int = 0):
+class BodyReader:
+    def read(self, buffer: bytearray) -> int:
+        return 0
+
+    def __len__(self):
+        return 0
+
+    def read_all(self) -> bytes:
+        result = bytearray()
+        buffer = bytearray(_MAX_READ_SZ)
+        b_read = self.read(buffer)
+        while b_read > 0:
+            result.extend(buffer[0:b_read])
+            b_read = self.read(buffer)
+        return result
+
+
+class NoBodyReader(BodyReader):
+    pass
+
+
+class SizedBodyReader(BodyReader):
+    def __init__(self, r: io.BufferedReader, size: int):
         self._reader = r
         self._pos = 0
         self._size = size
@@ -213,13 +234,31 @@ class Body:
         buffer[0:b_read] = b
         return b_read
 
-    def read_all(self) -> bytes:
-        result = bytearray(self._size)
-        buffer = bytearray(_MAX_READ_SZ)
-        b_read = self.read(buffer)
-        while b_read > 0:
-            result.extend(buffer[0:b_read])
-        return result
+
+class StreamBodyReader(BodyReader):
+    def __init__(self, r: io.BufferedReader):
+        self._reader = r
+        self._buffer = bytearray()
+        self._chunk = NoBodyReader()
+
+    def _next_chunk(self):
+        line = _read_line_from(self._reader, _MAX_READ_SZ).decode()
+        if not line.isnumeric():
+            raise BlockingIOError(f"Invalid size: {line}")
+        amt = int(line)
+        if amt == 0:
+            self._chunk = None
+        else:
+            self._chunk = SizedBodyReader(self._reader, amt)
+
+    def read(self, buffer: bytearray) -> int:
+        if self._chunk is None:
+            return 0
+        b_read = self._chunk.read(buffer)
+        if b_read > 0:
+            return b_read
+        self._next_chunk()
+        return self.read(buffer)
 
 
 class HttpRequest:
@@ -227,7 +266,7 @@ class HttpRequest:
                  method: str,
                  path: str,
                  header: List[Tuple[str, str]],
-                 body: Body,
+                 body: BodyReader,
                  trailer: List[Tuple[str, str]],
                  version: str = VERSION_HTTP_1_1):
         self.method = method
@@ -298,7 +337,7 @@ class HttpRequest:
 def _read_line_from(b: io.BufferedReader, max_line_sz: int = 1024) -> bytes:
     buf = b.readline(max_line_sz)
     if buf[-2:] != b'\r\n':
-        raise BlockingIOError()
+        raise BlockingIOError(f"Unexpected end: {buf[-2:]}")
     return buf[:-2]
 
 
@@ -315,7 +354,7 @@ def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_c
             raise BlockingIOError()
         line = _read_line_from(b, max_line_sz).decode()
         field_cnt += 1
-    return HttpRequest(method, path, [], Body(b, 0), [], version)
+    return HttpRequest(method, path, [], NoBodyReader(), [], version)
 
 
 _CS_AWAIT_REQUEST = 1

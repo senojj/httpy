@@ -1,6 +1,6 @@
 import io
 import unittest
-from httpy import HttpRequest, Body
+from httpy import HttpRequest, SizedBodyReader, StreamBodyReader
 
 
 class TestPath(unittest.TestCase):
@@ -17,7 +17,7 @@ class TestPath(unittest.TestCase):
             method='GET',
             path='/hello',
             header=[('Transfer-Encoding', 'chunked')],
-            body=Body(io.BufferedReader(io.BytesIO(body)), len(body)),
+            body=SizedBodyReader(io.BufferedReader(io.BytesIO(body)), len(body)),
             trailer=[('Signature', 'arolighroaeigfhjarlkseiklgfhaoli')]
         )
         buf = io.BytesIO()
@@ -27,3 +27,25 @@ class TestPath(unittest.TestCase):
         buf.seek(0)
         print(buf.read().decode())
         return
+
+    def test_body_reader(self):
+        body = (
+            b'64\r\n'
+            b'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do \r\n'
+            b'64\r\n'
+            b'eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut e\r\n'
+            b'64\r\n'
+            b'nim ad minim veniam, quis nostrud exercitation ullamco laboris n\r\n'
+            b'64\r\n'
+            b'isi ut aliquip ex ea commodo consequat. Duis aute irure dolor in\r\n'
+            b'64\r\n'
+            b' reprehenderit in voluptate velit esse cillum dolore eu fugiat n\r\n'
+            b'64\r\n'
+            b'ulla pariatur. Excepteur sint occaecat cupidatat non proident, s\r\n'
+            b'61\r\n'
+            b'unt in culpa qui officia deserunt mollit anim id est laborum.\r\n'
+            b'0\r\n')
+        buffer = io.BufferedReader(io.BytesIO(body))
+        reader = StreamBodyReader(buffer)
+        result = reader.read_all().decode()
+        print(result)
