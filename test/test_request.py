@@ -1,6 +1,6 @@
 import io
 import unittest
-from httpy import RequestWriter
+from httpy import RequestWriter, read_request_from
 
 
 class TestPath(unittest.TestCase):
@@ -31,7 +31,12 @@ class TestPath(unittest.TestCase):
         rw.close()
         w.flush()
         output.seek(0)
-        print(output.read().decode('utf-8'))
+        t = io.BufferedReader(io.BytesIO(output.read()))
+        req = read_request_from(t)
+        b = req.body.read_all()
+        req.body.close()
+        print(b)
+        print(req.trailers)
 
     def test_request_sized(self):
         body = (

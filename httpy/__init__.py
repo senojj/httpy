@@ -192,6 +192,7 @@ class Header:
 
 
 _MAX_READ_SZ = 1024
+_MAX_HEADER_FIELD_CNT = 100
 
 
 class BodyReader:
@@ -242,8 +243,9 @@ class SizedBodyReader(BodyReader):
 
 
 class StreamBodyReader(BodyReader):
-    def __init__(self, r: io.BufferedReader):
+    def __init__(self, r: io.BufferedReader, trailers: List[Tuple[str, str]]):
         self._reader = r
+        self._trailers = trailers
         self._buffer = bytearray()
         self._chunk = NoBodyReader()
 
@@ -269,6 +271,16 @@ class StreamBodyReader(BodyReader):
         self._next_chunk()
         return self.read(buffer)
 
+    def close(self):
+        line = _read_line_from(self._reader, _MAX_READ_SZ).decode()
+        count = 0
+        while line != '' and count < _MAX_READ_SZ:
+            field_parts = line.split(':', 1)
+            name = parse_header_field_name(str.rstrip(field_parts[0])).decode()
+            value = parse_header_field_value(str.lstrip(field_parts[1])).decode()
+            self._trailers.append((name, value))
+            count += 1
+            line = _read_line_from(self._reader, _MAX_READ_SZ).decode()
 
 class BodyWriter:
     def write(self, data: bytes) -> int:
@@ -340,9 +352,9 @@ class HttpRequest:
                  method: str,
                  path: str,
                  header: List[Tuple[str, str]],
-                 body: io.BufferedReader,
-                 trailers: List[str],
-                 version: str = VERSION_HTTP_1_1):
+                 body: BodyReader,
+                 trailers: List[Tuple[str, str]],
+                 version: str):
         self.method = method
         self.path = path
         self.header = header
@@ -457,12 +469,13 @@ def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_c
         fields.append((name, value))
         line = _read_line_from(b, max_line_sz).decode()
         field_cnt += 1
+    req = HttpRequest(method, path, fields, NoBodyReader(), [], version)
     if not chunked:
         body = SizedBodyReader(b, content_length)
     else:
-        body = StreamBodyReader(b)
-
-    return HttpRequest(method, path, fields, body, [], version)
+        body = StreamBodyReader(b, req.trailers)
+    req.body = body
+    return req
 
 
 _CS_AWAIT_REQUEST = 1
