@@ -345,58 +345,92 @@ class HttpRequest:
                  path: str,
                  header: List[Tuple[str, str]],
                  body: io.BufferedReader,
-                 trailer: List[Tuple[str, str]],
+                 trailers: List[str],
                  version: str = VERSION_HTTP_1_1):
         self.method = method
         self.path = path
         self.header = header
         self.body = body
-        self.trailer = trailer
+        self.trailers = trailers
         self.version = version
 
-    def write_to(self, b: io.BufferedWriter):
-        chunked = False
-        content_length = 0
-        request_line = str.encode(f'{self.method} {self.path} {self.version}\r\n')
+
+class RequestWriter:
+    def __init__(self, w: io.BufferedWriter):
+        self._chunked = False
+        self._content_length = 0
+        self._header_written = False
+        self._writer = w
+        self._header = {}
+        self._body_writer = NoBodyWriter()
+
+    def sized(self, value: int):
+        self._content_length = value
+
+    def chunked(self, value: bool = True):
+        self._chunked = value
+
+    def add_header(self, key: str, value: str):
+        if self._header.get(key) is None:
+            self._header[key] = {}
+        self._header[key][value] = None
+
+    def set_header(self, key: str, value: str):
+        self._header[key] = {}
+        self._header[key][value] = None
+
+    def unset_header(self, key: str):
+        if self._header.get(key) is not None:
+            del self._header[key]
+
+    def write_header(self, path: str, method: str = METHOD_GET, version: str = VERSION_HTTP_1_1):
+        request_line = str.encode(f'{method} {path} {version}\r\n')
+        if self._content_length > 0:
+            self.set_header("Content-Length", str(self._content_length))
+        if self._chunked:
+            self.set_header("Transfer-Encoding", "chunked")
+            self.unset_header("Content-Length")
         header = bytearray(request_line)
-        for k, v in self.header:
-            match k.lower():
-                case 'content-length':
-                    if not v.isnumeric():
-                        raise BlockingIOError(f"Invalid content length value: {v}")
-                    content_length = int(v)
-                case 'transfer-encoding':
-                    if v.lower() == 'chunked':
-                        chunked = True
+        for k, v in self._header.items():
             name = parse_header_field_name(k)
-            header.extend(name)
-            header.extend(b': ')
-            value = parse_header_field_value(v)
-            header.extend(value)
-            header.extend(b'\r\n')
-        for k, v in self.trailer:
-            header.extend(b'Trailer: ')
-            header.extend(parse_header_field_value(k))
-            header.extend(b'\r\n')
+            for val, _ in v.items():
+                header.extend(name)
+                header.extend(b': ')
+                value = parse_header_field_value(val)
+                header.extend(value)
+                header.extend(b'\r\n')
+        self._header = {}
         header.extend(b'\r\n')
-        b_written = b.write(header)
+        b_written = self._writer.write(header)
+        self._header_written = True
         if b_written < len(header):
             raise BlockingIOError()
-
-        buffer = self.body.read(_MAX_READ_SZ)
-        b_read = len(buffer)
-        if not chunked:
-            body_writer = SizedBodyWriter(b, content_length)
+        if not self._chunked:
+            self._body_writer = SizedBodyWriter(self._writer, self._content_length)
         else:
-            body_writer = StreamBodyWriter(b, 64)
+            self._body_writer = StreamBodyWriter(self._writer, 64)
 
-        while b_read > 0:
-            b_written = body_writer.write(buffer)
-            if b_written < b_read:
-                raise BlockingIOError("tried to write too much")
-            buffer = self.body.read(_MAX_READ_SZ)
-            b_read = len(buffer)
-        body_writer.close()
+    def write(self, data: bytes) -> int:
+        if not self._header_written:
+            self.write_header('/')
+        b_written = self._body_writer.write(data)
+        return b_written
+
+    def close(self):
+        if not self._header_written:
+            return
+        self._body_writer.close()
+        trailer = bytearray()
+        for k, v in self._header.items():
+            name = parse_header_field_name(k)
+            for val, _ in v.items():
+                trailer.extend(name)
+                trailer.extend(b': ')
+                value = parse_header_field_value(val)
+                trailer.extend(value)
+                trailer.extend(b'\r\n')
+        self._header = {}
+        self._writer.write(b'\r\n')
 
 
 def _read_line_from(b: io.BufferedReader, max_line_sz: int = 1024) -> bytes:
@@ -450,7 +484,6 @@ class HttpConnection:
 
     def send_request(self, request: HttpRequest):
         pass
-
 
 
 '''
