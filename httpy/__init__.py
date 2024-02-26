@@ -302,9 +302,6 @@ class SizedBodyWriter(BodyWriter):
         self._pos += b_written
         return b_written
 
-    def close(self):
-        self._writer.flush()
-
 
 class StreamBodyWriter(BodyWriter):
     def __init__(self, w: io.BufferedWriter, chunk_size: int):
@@ -336,7 +333,6 @@ class StreamBodyWriter(BodyWriter):
         self._writer.write(f'{size}\r\n'.encode())
         self._writer.write(chunk)
         self._writer.write(b'\r\n0\r\n')
-        self._writer.flush()
 
 
 class HttpRequest:
@@ -425,7 +421,6 @@ class RequestWriter:
         self._header = []
         self._writer.write(trailer)
         self._writer.write(b'\r\n')
-        self._writer.flush()
 
 
 def _read_line_from(b: io.BufferedReader, max_line_sz: int = 1024) -> bytes:

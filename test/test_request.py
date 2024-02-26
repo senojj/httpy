@@ -29,7 +29,7 @@ class TestPath(unittest.TestCase):
         rw.add_header("Signature", "abc123")
 
         rw.close()
-        output.flush()
+        w.flush()
         output.seek(0)
         print(output.read().decode('utf-8'))
 
@@ -55,6 +55,6 @@ class TestPath(unittest.TestCase):
             data = r.read(1024)
 
         rw.close()
-        output.flush()
+        w.flush()
         output.seek(0)
         print(output.read().decode('utf-8'))
