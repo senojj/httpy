@@ -423,7 +423,9 @@ class RequestWriter:
         trailer = bytearray()
         _write_fields(trailer, self._header)
         self._header = []
+        self._writer.write(trailer)
         self._writer.write(b'\r\n')
+        self._writer.flush()
 
 
 def _read_line_from(b: io.BufferedReader, max_line_sz: int = 1024) -> bytes:

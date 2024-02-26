@@ -18,13 +18,15 @@ class TestPath(unittest.TestCase):
         w = io.BufferedWriter(output)
         rw = RequestWriter(w)
         rw.chunked()
-
+        rw.add_header("Trailer", "Signature")
         rw.write_header('/hello')
 
         data = r.read(1024)
         while len(data) > 0:
             rw.write(data)
             data = r.read(1024)
+
+        rw.add_header("Signature", "abc123")
 
         rw.close()
         output.flush()
