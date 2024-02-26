@@ -326,7 +326,7 @@ class StreamBodyWriter(BodyWriter):
             self._writer.write(f'{len(chunk)}\r\n'.encode())
             self._writer.write(chunk)
             self._writer.write(b'\r\n')
-            self._buffer[0:remainder] = self._buffer[self._chunk_size:remainder]
+            self._buffer[0:remainder] = self._buffer[self._chunk_size:]
             self._pos = remainder
         return length
 
