@@ -355,13 +355,23 @@ class HttpRequest:
         self.version = version
 
 
+def _write_fields(buffer: bytearray, fields: List[Tuple[str, str]]):
+    for k, v in fields:
+        name = parse_header_field_name(k)
+        buffer.extend(name)
+        buffer.extend(b': ')
+        value = parse_header_field_value(v)
+        buffer.extend(value)
+        buffer.extend(b'\r\n')
+
+
 class RequestWriter:
     def __init__(self, w: io.BufferedWriter):
         self._chunked = False
         self._content_length = 0
         self._header_written = False
         self._writer = w
-        self._header = {}
+        self._header = []
         self._body_writer = NoBodyWriter()
 
     def sized(self, value: int):
@@ -371,17 +381,14 @@ class RequestWriter:
         self._chunked = value
 
     def add_header(self, key: str, value: str):
-        if self._header.get(key) is None:
-            self._header[key] = {}
-        self._header[key][value] = None
+        self._header.append((key, value))
 
     def set_header(self, key: str, value: str):
-        self._header[key] = {}
-        self._header[key][value] = None
+        self.unset_header(key)
+        self.add_header(key, value)
 
     def unset_header(self, key: str):
-        if self._header.get(key) is not None:
-            del self._header[key]
+        self._header = [(k, v) for k, v in self._header if k.lower() != key.lower()]
 
     def write_header(self, path: str, method: str = METHOD_GET, version: str = VERSION_HTTP_1_1):
         request_line = str.encode(f'{method} {path} {version}\r\n')
@@ -391,15 +398,8 @@ class RequestWriter:
             self.set_header("Transfer-Encoding", "chunked")
             self.unset_header("Content-Length")
         header = bytearray(request_line)
-        for k, v in self._header.items():
-            name = parse_header_field_name(k)
-            for val, _ in v.items():
-                header.extend(name)
-                header.extend(b': ')
-                value = parse_header_field_value(val)
-                header.extend(value)
-                header.extend(b'\r\n')
-        self._header = {}
+        _write_fields(header, self._header)
+        self._header = []
         header.extend(b'\r\n')
         b_written = self._writer.write(header)
         self._header_written = True
@@ -421,15 +421,8 @@ class RequestWriter:
             return
         self._body_writer.close()
         trailer = bytearray()
-        for k, v in self._header.items():
-            name = parse_header_field_name(k)
-            for val, _ in v.items():
-                trailer.extend(name)
-                trailer.extend(b': ')
-                value = parse_header_field_value(val)
-                trailer.extend(value)
-                trailer.extend(b'\r\n')
-        self._header = {}
+        _write_fields(trailer, self._header)
+        self._header = []
         self._writer.write(b'\r\n')
 
 
