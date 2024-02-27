@@ -1,8 +1,7 @@
 import io
 import socket
-from typing import Optional, List, Tuple
+from typing import List, Tuple
 from urllib.parse import urlsplit, urlunsplit
-from email.message import Message
 
 VERSION_HTTP_1_0 = "HTTP/1.0"
 VERSION_HTTP_1_1 = "HTTP/1.1"
@@ -181,14 +180,6 @@ def url_transform_reference(base: str, reference: str) -> str:
         scheme = b_scheme
 
     return str(urlunsplit((scheme, netloc, path, query, fragment)))
-
-
-class Header:
-    def __init__(self, message: Message):
-        self._message = message
-
-    def get(self, name: str) -> Optional[str]:
-        return self._message.get(name)
 
 
 _MAX_READ_SZ = 1024
@@ -449,6 +440,15 @@ def _read_line_from(b: io.BufferedReader, max_line_sz: int = 1024) -> bytes:
     return buf[:-2]
 
 
+def _parse_field(line: str) -> Tuple[str, str]:
+    field_parts = line.split(':', 1)
+    if len(field_parts) != 2:
+        raise BlockingIOError(f"illegal header field")
+    name = parse_header_field_name(str.rstrip(field_parts[0])).decode()
+    value = parse_header_field_value(str.lstrip(field_parts[1])).decode()
+    return name, value
+
+
 def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_cnt: int = 100) -> HttpRequest:
     request_line = _read_line_from(b, max_line_sz)
     request_line_parts = request_line.decode().split(' ', 2)
@@ -463,9 +463,7 @@ def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_c
     while line != '':
         if field_cnt > max_field_cnt:
             raise BlockingIOError()
-        field_parts = line.split(':', 1)
-        name = parse_header_field_name(str.rstrip(field_parts[0])).decode()
-        value = parse_header_field_value(str.lstrip(field_parts[1])).decode()
+        name, value = _parse_field(line)
         match name.lower():
             case 'content-length':
                 if not value.isnumeric():
@@ -492,8 +490,11 @@ class HttpConnection:
     def __init__(self, sock: socket.socket):
         self._socket = sock
 
-    def send_request(self, request: HttpRequest):
-        pass
+    def send_request(self) -> RequestWriter:
+        return RequestWriter(self._socket.makefile('wb'))
+
+    def receive_request(self) -> HttpRequest:
+        return read_request_from(self._socket.makefile('rb'))
 
 
 '''
