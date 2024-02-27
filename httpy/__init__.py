@@ -241,6 +241,9 @@ class SizedBodyReader(BodyReader):
         buffer[0:b_read] = b
         return b_read
 
+    def close(self):
+        self._reader.close()
+
 
 class StreamBodyReader(BodyReader):
     def __init__(self, r: io.BufferedReader, trailers: List[Tuple[str, str]]):
@@ -281,6 +284,8 @@ class StreamBodyReader(BodyReader):
             self._trailers.append((name, value))
             count += 1
             line = _read_line_from(self._reader, _MAX_READ_SZ).decode()
+        self._reader.close()
+
 
 class BodyWriter:
     def write(self, data: bytes) -> int:
@@ -316,10 +321,11 @@ class SizedBodyWriter(BodyWriter):
 
 
 class StreamBodyWriter(BodyWriter):
-    def __init__(self, w: io.BufferedWriter, chunk_size: int):
+    def __init__(self, w: io.BufferedWriter, chunk_size: int, trailers: List[Tuple[str, str]]):
         self._writer = w
         self._buffer = bytearray()
         self._chunk_size = chunk_size
+        self._trailers = trailers
         self._pos = 0
 
     def __len__(self):
@@ -345,6 +351,12 @@ class StreamBodyWriter(BodyWriter):
         self._writer.write(f'{size}\r\n'.encode())
         self._writer.write(chunk)
         self._writer.write(b'\r\n0\r\n')
+        buffer = bytearray()
+        _write_fields(buffer, self._trailers)
+        self._writer.write(buffer)
+        self._writer.write(b'\r\n')
+        self._writer.flush()
+        self._writer.close()
 
 
 class HttpRequest:
@@ -416,7 +428,7 @@ class RequestWriter:
         if not self._chunked:
             self._body_writer = SizedBodyWriter(self._writer, self._content_length)
         else:
-            self._body_writer = StreamBodyWriter(self._writer, 64)
+            self._body_writer = StreamBodyWriter(self._writer, 64, self._header)
 
     def write(self, data: bytes) -> int:
         if not self._header_written:
@@ -428,11 +440,6 @@ class RequestWriter:
         if not self._header_written:
             return
         self._body_writer.close()
-        trailer = bytearray()
-        _write_fields(trailer, self._header)
-        self._header = []
-        self._writer.write(trailer)
-        self._writer.write(b'\r\n')
 
 
 def _read_line_from(b: io.BufferedReader, max_line_sz: int = 1024) -> bytes:

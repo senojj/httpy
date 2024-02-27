@@ -1,4 +1,5 @@
 import io
+import os
 import unittest
 from httpy import RequestWriter, read_request_from
 
@@ -13,25 +14,22 @@ class TestPath(unittest.TestCase):
             b"eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia "
             b"deserunt mollit anim id est laborum.")
 
-        r = io.BufferedReader(io.BytesIO(body))
-        output = io.BytesIO()
-        w = io.BufferedWriter(output)
-        rw = RequestWriter(w)
+        rd = io.BufferedReader(io.BytesIO(body))
+        r, w = os.pipe()
+        rw = RequestWriter(io.BufferedWriter(io.FileIO(w, 'wb')))
         rw.chunked()
         rw.add_header("Trailer", "Signature")
         rw.write_header('/hello')
 
-        data = r.read(1024)
+        data = rd.read(1024)
         while len(data) > 0:
             rw.write(data)
-            data = r.read(1024)
+            data = rd.read(1024)
 
         rw.add_header("Signature", "abc123")
 
         rw.close()
-        w.flush()
-        output.seek(0)
-        t = io.BufferedReader(io.BytesIO(output.read()))
+        t = io.BufferedReader(io.FileIO(r, 'rb'))
         req = read_request_from(t)
         b = req.body.read_all()
         req.body.close()
