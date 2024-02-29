@@ -28,7 +28,7 @@ METHOD_OPTION = 'OPTION'
 
 STATUS_CONTINUE = 100
 STATUS_SWITCHING_PROTOCOLS = 101
-STATUS_OK = 200
+STATUS_OK = (200, 'OK')
 STATUS_CREATED = 201
 STATUS_ACCEPTED = 202
 STATUS_NON_AUTHORITATIVE_INFORMATION = 203
@@ -354,16 +354,30 @@ class HttpRequest:
     def __init__(self,
                  method: str,
                  path: str,
-                 header: List[Tuple[str, str]],
+                 headers: List[Tuple[str, str]],
                  body: BodyReader,
                  trailers: List[Tuple[str, str]],
                  version: str):
         self.method = method
         self.path = path
-        self.header = header
+        self.headers = headers
         self.body = body
         self.trailers = trailers
         self.version = version
+
+
+class HttpResponse:
+    def __init__(self,
+                 version: str,
+                 status: Tuple[int, str],
+                 headers: List[Tuple[str, str]],
+                 body: BodyReader,
+                 trailers: List[Tuple[str, str]]):
+        self.version = version
+        self.status = status
+        self.headers = headers
+        self.body = body
+        self.trailers = trailers
 
 
 def _write_fields(buffer: bytearray, fields: List[Tuple[str, str]]):
@@ -433,6 +447,63 @@ class RequestWriter:
         self._body_writer.close()
 
 
+class ResponseWriter:
+    def __init__(self, w: io.BufferedWriter):
+        self._chunked = False
+        self._content_length = 0
+        self._header_written = False
+        self._writer = w
+        self._header = []
+        self._body_writer = NoBodyWriter()
+
+    def sized(self, value: int):
+        self._content_length = value
+
+    def chunked(self, value: bool = True):
+        self._chunked = value
+
+    def add_header(self, key: str, value: str):
+        self._header.append((key, value))
+
+    def set_header(self, key: str, value: str):
+        self.unset_header(key)
+        self.add_header(key, value)
+
+    def unset_header(self, key: str):
+        self._header = [(k, v) for k, v in self._header if k.lower() != key.lower()]
+
+    def write_header(self, status: Tuple[int, str], version: str = VERSION_HTTP_1_1):
+        status_line = str.encode(f'{version} {status[0]} {status[1]}\r\n')
+        if self._content_length > 0:
+            self.set_header("Content-Length", str(self._content_length))
+        if self._chunked:
+            self.set_header("Transfer-Encoding", "chunked")
+            self.unset_header("Content-Length")
+        header = bytearray(status_line)
+        _write_fields(header, self._header)
+        self._header = []
+        header.extend(b'\r\n')
+        b_written = self._writer.write(header)
+        self._header_written = True
+        if b_written < len(header):
+            raise BlockingIOError()
+        if not self._chunked:
+            self._body_writer = SizedBodyWriter(self._writer, self._content_length)
+        else:
+            self._body_writer = StreamBodyWriter(self._writer, 64, self._header)
+
+    def write(self, data: bytes) -> int:
+        if not self._header_written:
+            self.write_header(STATUS_OK)
+        b_written = self._body_writer.write(data)
+        return b_written
+
+    def close(self):
+        if not self._header_written:
+            return
+        self._body_writer.close()
+
+
 def _read_line_from(b: io.BufferedReader, max_line_sz: int = 1024) -> bytes:
     buf = b.readline(max_line_sz)
     if buf[-2:] != b'\r\n':
@@ -481,6 +552,43 @@ def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_c
         body = StreamBodyReader(b, req.trailers)
     req.body = body
     return req
+
+
+def read_response_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_cnt: int = 100) -> HttpResponse:
+    status_line = _read_line_from(b, max_line_sz)
+    status_line_parts = status_line.decode().split(' ', 2)
+    version = status_line_parts[0]
+    status_code = status_line_parts[1]
+    if not status_code.isnumeric():
+        raise BlockingIOError("Invalid")
+    status_text = status_line_parts[2]
+    status = (int(status_code), status_text)
+    field_cnt = 0
+    fields = []
+    content_length = 0
+    chunked = False
+    line = _read_line_from(b, max_line_sz).decode()
+    while line != '':
+        if field_cnt > max_field_cnt:
+            raise BlockingIOError()
+        name, value = _parse_field(line)
+        match name.lower():
+            case 'content-length':
+                if not value.isnumeric():
+                    raise BlockingIOError("Invalid content length value")
+                content_length = int(value)
+            case 'transfer-encoding':
+                chunked = value.lower() == 'chunked'
+        fields.append((name, value))
+        line = _read_line_from(b, max_line_sz).decode()
+        field_cnt += 1
+    res = HttpResponse(version, status, fields, NoBodyReader(), [])
+    if not chunked:
+        body = SizedBodyReader(b, content_length)
+    else:
+        body = StreamBodyReader(b, res.trailers)
+    res.body = body
+    return res
 
 
 _CS_AWAIT_REQUEST = 1
