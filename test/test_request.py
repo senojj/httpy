@@ -1,7 +1,8 @@
 import io
 import os
+import socket
 import unittest
-from httpy import RequestWriter, read_request_from
+from httpy import RequestWriter, read_request_from, HttpConnection
 
 
 class TestPath(unittest.TestCase):
@@ -36,7 +37,7 @@ class TestPath(unittest.TestCase):
         print(b)
         print(req.trailers)
 
-    def test_request_sized(self):
+    def test_socket(self):
         body = (
             b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
             b"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip "
@@ -44,20 +45,21 @@ class TestPath(unittest.TestCase):
             b"eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia "
             b"deserunt mollit anim id est laborum.")
 
-        r = io.BufferedReader(io.BytesIO(body))
-        output = io.BytesIO()
-        w = io.BufferedWriter(output)
-        rw = RequestWriter(w)
-        rw.sized(len(body))
+        client, server = socket.socketpair()
+        client = HttpConnection(client)
+        server = HttpConnection(server)
 
-        rw.write_header('/hello')
+        request = client.send_request()
+        request.add_header('Host', 'test.com')
+        request.sized(len(body))
+        request.write_header('/hello-world')
+        request.write(body)
+        request.close()
 
-        data = r.read(1024)
-        while len(data) > 0:
-            rw.write(data)
-            data = r.read(1024)
+        recv_request = server.receive_request()
+        body = recv_request.body.read_all()
+        print(body.decode())
+        recv_request.body.close()
 
-        rw.close()
-        w.flush()
-        output.seek(0)
-        print(output.read().decode('utf-8'))
+        client.close()
+        server.close()

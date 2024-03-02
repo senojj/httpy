@@ -310,6 +310,10 @@ class SizedBodyWriter(BodyWriter):
         self._pos += b_written
         return b_written
 
+    def close(self):
+        self._writer.flush()
+        self._writer.close()
+
 
 class StreamBodyWriter(BodyWriter):
     def __init__(self, w: io.BufferedWriter, chunk_size: int, trailers: List[Tuple[str, str]]):
@@ -603,6 +607,15 @@ class HttpConnection:
 
     def receive_request(self) -> HttpRequest:
         return read_request_from(self._socket.makefile('rb'))
+
+    def send_response(self) -> ResponseWriter:
+        return ResponseWriter(self._socket.makefile('wb'))
+
+    def receive_response(self) -> HttpResponse:
+        return read_response_from(self._socket.makefile('rb'))
+
+    def close(self):
+        self._socket.close()
 
 
 '''
