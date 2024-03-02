@@ -45,9 +45,9 @@ class TestPath(unittest.TestCase):
             b"eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia "
             b"deserunt mollit anim id est laborum.")
 
-        client, server = socket.socketpair()
-        client = HttpConnection(client)
-        server = HttpConnection(server)
+        s_client, s_server = socket.socketpair()
+        client = HttpConnection(s_client)
+        server = HttpConnection(s_server)
 
         request = client.send_request()
         request.add_header('Host', 'test.com')
@@ -56,6 +56,18 @@ class TestPath(unittest.TestCase):
         request.write(body)
         request.close()
 
+        request = client.send_request()
+        request.add_header('Host', 'test.com')
+        request.sized(5)
+        request.write_header('/hello')
+        request.write(b'hello')
+        request.close()
+
+        recv_request = server.receive_request()
+        body = recv_request.body.read_all()
+        print(body.decode())
+        recv_request.body.close()
+
         recv_request = server.receive_request()
         body = recv_request.body.read_all()
         print(body.decode())
@@ -63,3 +75,6 @@ class TestPath(unittest.TestCase):
 
         client.close()
         server.close()
+
+        s_client.close()
+        s_server.close()

@@ -232,9 +232,6 @@ class SizedBodyReader(BodyReader):
         buffer[0:b_read] = b
         return b_read
 
-    def close(self):
-        self._reader.close()
-
 
 class StreamBodyReader(BodyReader):
     def __init__(self, r: io.BufferedReader, trailers: List[Tuple[str, str]]):
@@ -275,7 +272,6 @@ class StreamBodyReader(BodyReader):
             self._trailers.append((name, value))
             count += 1
             line = _read_line_from(self._reader, _MAX_READ_SZ).decode()
-        self._reader.close()
 
 
 class BodyWriter:
@@ -312,7 +308,6 @@ class SizedBodyWriter(BodyWriter):
 
     def close(self):
         self._writer.flush()
-        self._writer.close()
 
 
 class StreamBodyWriter(BodyWriter):
@@ -351,7 +346,6 @@ class StreamBodyWriter(BodyWriter):
         self._writer.write(buffer)
         self._writer.write(b'\r\n')
         self._writer.flush()
-        self._writer.close()
 
 
 class HttpRequest:
@@ -600,22 +594,24 @@ _CS_AWAIT_REQUEST = 1
 
 class HttpConnection:
     def __init__(self, sock: socket.socket):
-        self._socket = sock
+        self._writer = sock.makefile('wb')
+        self._reader = sock.makefile('rb')
 
     def send_request(self) -> RequestWriter:
-        return RequestWriter(self._socket.makefile('wb'))
+        return RequestWriter(self._writer)
 
     def receive_request(self) -> HttpRequest:
-        return read_request_from(self._socket.makefile('rb'))
+        return read_request_from(self._reader)
 
     def send_response(self) -> ResponseWriter:
-        return ResponseWriter(self._socket.makefile('wb'))
+        return ResponseWriter(self._writer)
 
     def receive_response(self) -> HttpResponse:
-        return read_response_from(self._socket.makefile('rb'))
+        return read_response_from(self._reader)
 
     def close(self):
-        self._socket.close()
+        self._writer.close()
+        self._reader.close()
 
 
 '''
