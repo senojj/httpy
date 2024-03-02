@@ -1,44 +1,11 @@
-import io
-import os
 import socket
 import unittest
-from httpy import RequestWriter, read_request_from, HttpConnection
+from httpy import HttpConnection
 
 
 class TestPath(unittest.TestCase):
-
-    def test_request_streaming(self):
-        body = (
-            b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
-            b"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip "
-            b"ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore "
-            b"eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia "
-            b"deserunt mollit anim id est laborum.")
-
-        rd = io.BufferedReader(io.BytesIO(body))
-        r, w = os.pipe()
-        rw = RequestWriter(io.BufferedWriter(io.FileIO(w, 'wb')))
-        rw.chunked()
-        rw.add_header("Trailer", "Signature")
-        rw.write_header('/hello')
-
-        data = rd.read(1024)
-        while len(data) > 0:
-            rw.write(data)
-            data = rd.read(1024)
-
-        rw.add_header("Signature", "abc123")
-
-        rw.close()
-        t = io.BufferedReader(io.FileIO(r, 'rb'))
-        req = read_request_from(t)
-        b = req.body.read_all()
-        req.body.close()
-        print(b)
-        print(req.trailers)
-
     def test_sized_socket(self):
-        body = (
+        payload = (
             b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
             b"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip "
             b"ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore "
@@ -46,14 +13,14 @@ class TestPath(unittest.TestCase):
             b"deserunt mollit anim id est laborum.")
 
         s_client, s_server = socket.socketpair()
-        client = HttpConnection(s_client)
-        server = HttpConnection(s_server)
+        client = HttpConnection(s_client.makefile('rb'), s_client.makefile('wb'))
+        server = HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
 
         request = client.send_request()
         request.add_header('Host', 'test.com')
-        request.sized(len(body))
+        request.sized(len(payload))
         request.write_header('/hello-world')
-        request.write(body)
+        request.write(payload)
         request.close()
 
         request = client.send_request()
@@ -65,12 +32,6 @@ class TestPath(unittest.TestCase):
 
         recv_request = server.receive_request()
         body = recv_request.body.read_all()
-        print(body.decode())
-        recv_request.body.close()
-
-        recv_request = server.receive_request()
-        body = recv_request.body.read_all()
-        print(body.decode())
         recv_request.body.close()
 
         client.close()
@@ -79,8 +40,12 @@ class TestPath(unittest.TestCase):
         s_client.close()
         s_server.close()
 
+        self.assertEqual(recv_request.path, '/hello-world')
+        self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Content-Length', '445')])
+        self.assertEqual(body, payload)
+
     def test_stream_socket(self):
-        body = (
+        payload = (
             b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
             b"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip "
             b"ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore "
@@ -88,31 +53,18 @@ class TestPath(unittest.TestCase):
             b"deserunt mollit anim id est laborum.")
 
         s_client, s_server = socket.socketpair()
-        client = HttpConnection(s_client)
-        server = HttpConnection(s_server)
+        client = HttpConnection(s_client.makefile('rb'), s_client.makefile('wb'))
+        server = HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
 
         request = client.send_request()
         request.add_header('Host', 'test.com')
         request.chunked()
         request.write_header('/hello-world')
-        request.write(body)
-        request.close()
-
-        request = client.send_request()
-        request.add_header('Host', 'test.com')
-        request.chunked()
-        request.write_header('/hello')
-        request.write(b'hello')
+        request.write(payload)
         request.close()
 
         recv_request = server.receive_request()
         body = recv_request.body.read_all()
-        print(body.decode())
-        recv_request.body.close()
-
-        recv_request = server.receive_request()
-        body = recv_request.body.read_all()
-        print(body.decode())
         recv_request.body.close()
 
         client.close()
@@ -120,3 +72,7 @@ class TestPath(unittest.TestCase):
 
         s_client.close()
         s_server.close()
+
+        self.assertEqual(recv_request.path, '/hello-world')
+        self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Transfer-Encoding', 'chunked')])
+        self.assertEqual(body, payload)

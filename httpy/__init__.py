@@ -593,9 +593,9 @@ _CS_AWAIT_REQUEST = 1
 
 
 class HttpConnection:
-    def __init__(self, sock: socket.socket):
-        self._writer = sock.makefile('wb')
-        self._reader = sock.makefile('rb')
+    def __init__(self, reader: io.BufferedReader, writer: io.BufferedWriter):
+        self._writer = writer
+        self._reader = reader
 
     def send_request(self) -> RequestWriter:
         return RequestWriter(self._writer)
