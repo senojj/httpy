@@ -1,6 +1,6 @@
 import socket
 import unittest
-from httpy import HttpConnection
+from httpy import HttpConnection, VERSION_HTTP_1_1, METHOD_GET
 
 
 class TestPath(unittest.TestCase):
@@ -40,6 +40,8 @@ class TestPath(unittest.TestCase):
         s_client.close()
         s_server.close()
 
+        self.assertEqual(recv_request.method, METHOD_GET)
+        self.assertEqual(recv_request.version, VERSION_HTTP_1_1)
         self.assertEqual(recv_request.path, '/hello-world')
         self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Content-Length', '445')])
         self.assertEqual(body, payload)
@@ -61,6 +63,7 @@ class TestPath(unittest.TestCase):
         request.chunked()
         request.write_header('/hello-world')
         request.write(payload)
+        request.add_header('Test', '123')
         request.close()
 
         recv_request = server.receive_request()
@@ -73,6 +76,9 @@ class TestPath(unittest.TestCase):
         s_client.close()
         s_server.close()
 
+        self.assertEqual(recv_request.method, METHOD_GET)
+        self.assertEqual(recv_request.version, VERSION_HTTP_1_1)
         self.assertEqual(recv_request.path, '/hello-world')
         self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Transfer-Encoding', 'chunked')])
         self.assertEqual(body, payload)
+        self.assertEqual(recv_request.trailers, [('Test', '123')])
