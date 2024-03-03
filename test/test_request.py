@@ -1,6 +1,8 @@
 import socket
+import io
 import unittest
-from httpy import HttpConnection, VERSION_HTTP_1_1, METHOD_GET
+import gzip
+from httpy import HttpConnection, VERSION_HTTP_1_1, METHOD_GET, StreamBodyWriter, StreamBodyReader
 
 
 class TestPath(unittest.TestCase):
@@ -82,3 +84,17 @@ class TestPath(unittest.TestCase):
         self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Transfer-Encoding', 'chunked')])
         self.assertEqual(body, payload)
         self.assertEqual(recv_request.trailers, [('Test', '123')])
+
+    def test_gzip_streaming(self):
+        s_client = io.BytesIO()
+        w_client = io.BufferedWriter(s_client)
+        b_writer = StreamBodyWriter(w_client, 64, [])
+        g_client = gzip.GzipFile(filename=None, fileobj=b_writer, mode='wb')
+        g_client.write(b'hello')
+        g_client.close()
+        b_writer.close()
+        s_client.seek(0)
+        b_reader = StreamBodyReader(s_client, [])
+        value = b_reader.read_all()
+        print(value)
+        print(gzip.decompress(value).decode('utf-8'))

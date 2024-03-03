@@ -187,8 +187,11 @@ _MAX_HEADER_FIELD_CNT = 100
 
 
 class BodyReader:
-    def read(self, buffer: bytearray) -> int:
+    def read_into(self, buffer: bytearray) -> int:
         return 0
+
+    def read(self, size: int = -1) -> bytes:
+        return b''
 
     def __len__(self):
         return 0
@@ -196,17 +199,17 @@ class BodyReader:
     def read_all(self) -> bytes:
         result = bytearray()
         buffer = bytearray(_MAX_READ_SZ)
-        b_read = self.read(buffer)
+        b_read = self.read_into(buffer)
         while b_read > 0:
             result.extend(buffer[0:b_read])
-            b_read = self.read(buffer)
+            b_read = self.read_into(buffer)
         return result
 
     def close(self):
         buffer = bytearray(_MAX_READ_SZ)
-        b_read = self.read(buffer)
+        b_read = self.read_into(buffer)
         while b_read > 0:
-            b_read = self.read(buffer)
+            b_read = self.read_into(buffer)
 
 
 class NoBodyReader(BodyReader):
@@ -222,7 +225,7 @@ class SizedBodyReader(BodyReader):
     def __len__(self):
         return self._size
 
-    def read(self, buffer: bytearray) -> int:
+    def read_into(self, buffer: bytearray) -> int:
         amt = min(len(buffer), self._size - self._pos)
         if amt == 0:
             return 0
@@ -231,6 +234,9 @@ class SizedBodyReader(BodyReader):
         self._pos += b_read
         buffer[0:b_read] = b
         return b_read
+
+    def read(self, size: int = -1) -> bytes:
+        return self._reader.read(size)
 
 
 class StreamBodyReader(BodyReader):
@@ -253,14 +259,17 @@ class StreamBodyReader(BodyReader):
         else:
             self._chunk = SizedBodyReader(self._reader, amt)
 
-    def read(self, buffer: bytearray) -> int:
+    def read_into(self, buffer: bytearray) -> int:
         if self._chunk is None:
             return 0
-        b_read = self._chunk.read(buffer)
+        b_read = self._chunk.read_into(buffer)
         if b_read > 0:
             return b_read
         self._next_chunk()
-        return self.read(buffer)
+        return self.read_into(buffer)
+
+    def read(self, size: int = -1) -> bytes:
+        return self._reader.read(size)
 
     def close(self):
         line = _read_line_from(self._reader, _MAX_READ_SZ).decode()
