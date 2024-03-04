@@ -21,6 +21,34 @@ class TestPath(unittest.TestCase):
         self.assertEqual(buf.read(), b'aaaaabbbbb')
         buf.close()
 
+    def test_stream_body_writer(self):
+        buf = io.BytesIO()
+        buf_writer = io.BufferedWriter(buf)
+        body_writer = StreamBodyWriter(buf_writer, 5, [('Test', '123')])
+        b_written = body_writer.write(b'aaaaa')
+        self.assertEqual(b_written, 5)
+        b_written = body_writer.write(b'bbbbb')
+        self.assertEqual(b_written, 5)
+        b_written = body_writer.write(b'ccccc')
+        self.assertEqual(b_written, 5)
+        b_written = body_writer.write(b'ddd')
+        self.assertEqual(b_written, 3)
+        body_writer.close()
+        buf.seek(0)
+        self.assertEqual(buf.read(), b'5\r\n'
+                                     b'aaaaa\r\n'
+                                     b'5\r\n'
+                                     b'bbbbb\r\n'
+                                     b'5\r\n'
+                                     b'ccccc\r\n'
+                                     b'3\r\n'
+                                     b'ddd'
+                                     b'\r\n'
+                                     b'0\r\n'
+                                     b'Test: 123\r\n'
+                                     b'\r\n')
+        buf.close()
+
     def test_sized_socket(self):
         payload = (
             b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
