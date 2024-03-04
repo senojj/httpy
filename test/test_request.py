@@ -2,10 +2,25 @@ import socket
 import io
 import unittest
 import gzip
-from httpy import HttpConnection, VERSION_HTTP_1_1, METHOD_GET, StreamBodyWriter, StreamBodyReader
+from httpy import HttpConnection, VERSION_HTTP_1_1, METHOD_GET, StreamBodyWriter, StreamBodyReader, SizedBodyWriter
 
 
 class TestPath(unittest.TestCase):
+    def test_sized_body_writer(self):
+        buf = io.BytesIO()
+        buf_writer = io.BufferedWriter(buf)
+        body_writer = SizedBodyWriter(buf_writer, 10)
+        b_written = body_writer.write(b'aaaaa')
+        self.assertEqual(b_written, 5)
+        b_written = body_writer.write(b'bbbbb')
+        self.assertEqual(b_written, 5)
+        b_written = body_writer.write(b'ccccc')
+        self.assertEqual(b_written, 0)
+        body_writer.close()
+        buf.seek(0)
+        self.assertEqual(buf.read(), b'aaaaabbbbb')
+        buf.close()
+
     def test_sized_socket(self):
         payload = (
             b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
@@ -86,15 +101,22 @@ class TestPath(unittest.TestCase):
         self.assertEqual(recv_request.trailers, [('Test', '123')])
 
     def test_gzip_streaming(self):
+        payload = (
+            b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
+            b"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip "
+            b"ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore "
+            b"eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia "
+            b"deserunt mollit anim id est laborum.")
+
         s_client = io.BytesIO()
         w_client = io.BufferedWriter(s_client)
         b_writer = StreamBodyWriter(w_client, 64, [])
         g_client = gzip.GzipFile(filename=None, fileobj=b_writer, mode='wb')
-        g_client.write(b'hello')
+        g_client.write(payload)
         g_client.close()
         b_writer.close()
         s_client.seek(0)
         b_reader = StreamBodyReader(s_client, [])
         value = b_reader.read_all()
-        print(value)
-        print(gzip.decompress(value).decode('utf-8'))
+        body = gzip.decompress(value)
+        self.assertEqual(payload, body)
