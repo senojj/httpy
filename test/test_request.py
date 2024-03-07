@@ -2,8 +2,12 @@ import socket
 import io
 import unittest
 import gzip
+from typing import Generator
 from httpy import HttpConnection, VERSION_HTTP_1_1, METHOD_GET, StreamBodyWriter, StreamBodyReader, SizedBodyWriter
 
+def chunk(size: int, data: bytes) -> Generator[bytes, None, None]:
+    for i in range(0, len(data), size):
+        yield data[i:i + size]
 
 class TestPath(unittest.TestCase):
     def test_sized_body_writer(self):
@@ -140,7 +144,10 @@ class TestPath(unittest.TestCase):
         w_client = io.BufferedWriter(s_client)
         b_writer = StreamBodyWriter(w_client, 64, [])
         g_client = gzip.GzipFile(filename=None, fileobj=b_writer, mode='wb')
-        g_client.write(payload)
+
+        for data in chunk(6, payload):
+            g_client.write(data)
+
         g_client.close()
         b_writer.close()
         s_client.seek(0)
