@@ -293,6 +293,9 @@ class BodyWriter:
     def close(self):
         pass
 
+    def flush(self):
+        pass
+
 
 class NoBodyWriter(BodyWriter):
     pass
@@ -316,6 +319,9 @@ class SizedBodyWriter(BodyWriter):
         return b_written
 
     def close(self):
+        self._writer.flush()
+
+    def flush(self):
         self._writer.flush()
 
 
@@ -354,6 +360,9 @@ class StreamBodyWriter(BodyWriter):
         _write_fields(buffer, self._trailers)
         self._writer.write(buffer)
         self._writer.write(b'\r\n')
+        self._writer.flush()
+
+    def flush(self):
         self._writer.flush()
 
 

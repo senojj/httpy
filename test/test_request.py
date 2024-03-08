@@ -5,9 +5,11 @@ import gzip
 from typing import Generator
 from httpy import HttpConnection, VERSION_HTTP_1_1, METHOD_GET, StreamBodyWriter, StreamBodyReader, SizedBodyWriter
 
+
 def chunk(size: int, data: bytes) -> Generator[bytes, None, None]:
     for i in range(0, len(data), size):
         yield data[i:i + size]
+
 
 class TestPath(unittest.TestCase):
     def test_sized_body_writer(self):
@@ -28,25 +30,51 @@ class TestPath(unittest.TestCase):
     def test_stream_body_writer(self):
         buf = io.BytesIO()
         buf_writer = io.BufferedWriter(buf)
-        body_writer = StreamBodyWriter(buf_writer, 5, [('Test', '123')])
+        body_writer = StreamBodyWriter(buf_writer, 6, [('Test', '123')])
         b_written = body_writer.write(b'aaaaa')
         self.assertEqual(b_written, 5)
+        body_writer.flush()
+        self.assertEqual(buf.getvalue(), b'')
         b_written = body_writer.write(b'bbbbb')
         self.assertEqual(b_written, 5)
+        body_writer.flush()
+        self.assertEqual(buf.getvalue(), b'6\r\n'
+                                         b'aaaaab\r\n')
         b_written = body_writer.write(b'ccccc')
         self.assertEqual(b_written, 5)
+        body_writer.flush()
+        self.assertEqual(buf.getvalue(), b'6\r\n'
+                                         b'aaaaab\r\n'
+                                         b'6\r\n'
+                                         b'bbbbcc\r\n')
         b_written = body_writer.write(b'ddd')
         self.assertEqual(b_written, 3)
+        body_writer.flush()
+        self.assertEqual(buf.getvalue(), b'6\r\n'
+                                         b'aaaaab\r\n'
+                                         b'6\r\n'
+                                         b'bbbbcc\r\n'
+                                         b'6\r\n'
+                                         b'cccddd\r\n')
+        b_written = body_writer.write(b'eee')
+        self.assertEqual(b_written, 3)
+        body_writer.flush()
+        self.assertEqual(buf.getvalue(), b'6\r\n'
+                                         b'aaaaab\r\n'
+                                         b'6\r\n'
+                                         b'bbbbcc\r\n'
+                                         b'6\r\n'
+                                         b'cccddd\r\n')
         body_writer.close()
         buf.seek(0)
-        self.assertEqual(buf.read(), b'5\r\n'
-                                     b'aaaaa\r\n'
-                                     b'5\r\n'
-                                     b'bbbbb\r\n'
-                                     b'5\r\n'
-                                     b'ccccc\r\n'
+        self.assertEqual(buf.read(), b'6\r\n'
+                                     b'aaaaab\r\n'
+                                     b'6\r\n'
+                                     b'bbbbcc\r\n'
+                                     b'6\r\n'
+                                     b'cccddd\r\n'
                                      b'3\r\n'
-                                     b'ddd'
+                                     b'eee'
                                      b'\r\n'
                                      b'0\r\n'
                                      b'Test: 123\r\n'
