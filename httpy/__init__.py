@@ -520,7 +520,7 @@ class ResponseWriter:
         self._body_writer.close()
 
 
-def _read_line_from(b: io.BufferedReader, max_line_sz: int = 1024) -> bytes:
+def _read_line_from(b: io.BufferedReader, max_line_sz: int = _MAX_READ_SZ) -> bytes:
     buf = b.readline(max_line_sz)
     if buf[-2:] != b'\r\n':
         raise BlockingIOError(f"Unexpected end: {buf[-2:]}")
@@ -538,8 +538,8 @@ def _parse_field(line: str) -> Tuple[str, str]:
 
 def _read_header_fields(b: io.BufferedReader,
                         fields: List[Tuple[str, str]],
-                        max_line_sz: int = 1024,
-                        max_field_cnt: int = 100) -> (int, bool):
+                        max_line_sz: int = _MAX_READ_SZ,
+                        max_field_cnt: int = _MAX_HEADER_FIELD_CNT) -> (int, bool):
     field_cnt = 0
     content_length = 0
     chunked = False
@@ -561,7 +561,9 @@ def _read_header_fields(b: io.BufferedReader,
     return content_length, chunked
 
 
-def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_cnt: int = 100) -> HttpRequest:
+def read_request_from(b: io.BufferedReader,
+                      max_line_sz: int = _MAX_READ_SZ,
+                      max_field_cnt: int = _MAX_HEADER_FIELD_CNT) -> HttpRequest:
     request_line = _read_line_from(b, max_line_sz)
     request_line_parts = request_line.decode().split(' ', 2)
     method = request_line_parts[0]
@@ -578,7 +580,9 @@ def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_c
     return req
 
 
-def read_response_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_cnt: int = 100) -> HttpResponse:
+def read_response_from(b: io.BufferedReader,
+                       max_line_sz: int = _MAX_READ_SZ,
+                       max_field_cnt: int = _MAX_HEADER_FIELD_CNT) -> HttpResponse:
     status_line = _read_line_from(b, max_line_sz)
     status_line_parts = status_line.decode().split(' ', 2)
     version = status_line_parts[0]
