@@ -536,20 +536,17 @@ def _parse_field(line: str) -> Tuple[str, str]:
     return name, value
 
 
-def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_cnt: int = 100) -> HttpRequest:
-    request_line = _read_line_from(b, max_line_sz)
-    request_line_parts = request_line.decode().split(' ', 2)
-    method = request_line_parts[0]
-    path = request_line_parts[1]
-    version = request_line_parts[2]
+def _read_header_fields(b: io.BufferedReader,
+                        fields: List[Tuple[str, str]],
+                        max_line_sz: int = 1024,
+                        max_field_cnt: int = 100) -> (int, bool):
     field_cnt = 0
-    fields = []
     content_length = 0
     chunked = False
     line = _read_line_from(b, max_line_sz).decode()
     while line != '':
         if field_cnt > max_field_cnt:
-            raise BlockingIOError()
+            raise BlockingIOError("Invalid header field count")
         name, value = _parse_field(line)
         match name.lower():
             case 'content-length':
@@ -561,6 +558,17 @@ def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_c
         fields.append((name, value))
         line = _read_line_from(b, max_line_sz).decode()
         field_cnt += 1
+    return content_length, chunked
+
+
+def read_request_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_cnt: int = 100) -> HttpRequest:
+    request_line = _read_line_from(b, max_line_sz)
+    request_line_parts = request_line.decode().split(' ', 2)
+    method = request_line_parts[0]
+    path = request_line_parts[1]
+    version = request_line_parts[2]
+    fields = []
+    content_length, chunked = _read_header_fields(b, fields, max_line_sz, max_field_cnt)
     req = HttpRequest(method, path, fields, NoBodyReader(), [], version)
     if not chunked:
         body = SizedBodyReader(b, content_length)
@@ -579,25 +587,8 @@ def read_response_from(b: io.BufferedReader, max_line_sz: int = 1024, max_field_
         raise BlockingIOError("Invalid")
     status_text = status_line_parts[2]
     status = (int(status_code), status_text)
-    field_cnt = 0
     fields = []
-    content_length = 0
-    chunked = False
-    line = _read_line_from(b, max_line_sz).decode()
-    while line != '':
-        if field_cnt > max_field_cnt:
-            raise BlockingIOError()
-        name, value = _parse_field(line)
-        match name.lower():
-            case 'content-length':
-                if not value.isnumeric():
-                    raise BlockingIOError("Invalid content length value")
-                content_length = int(value)
-            case 'transfer-encoding':
-                chunked = value.lower() == 'chunked'
-        fields.append((name, value))
-        line = _read_line_from(b, max_line_sz).decode()
-        field_cnt += 1
+    content_length, chunked = _read_header_fields(b, fields, max_line_sz, max_field_cnt)
     res = HttpResponse(version, status, fields, NoBodyReader(), [])
     if not chunked:
         body = SizedBodyReader(b, content_length)
