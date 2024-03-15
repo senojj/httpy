@@ -561,14 +561,16 @@ def _read_header_fields(b: io.BufferedReader,
     return content_length, chunked
 
 
+def read_request_line(b: io.BufferedReader, max_line_sz: _MAX_READ_SZ) -> (str, str, str):
+    rl = _read_line_from(b, max_line_sz)
+    rl_parts = rl.decode('utf-8').split(' ', 2)
+    return rl_parts[0], rl_parts[1], rl_parts[2]
+
+
 def read_request_from(b: io.BufferedReader,
                       max_line_sz: int = _MAX_READ_SZ,
                       max_field_cnt: int = _MAX_HEADER_FIELD_CNT) -> HttpRequest:
-    request_line = _read_line_from(b, max_line_sz)
-    request_line_parts = request_line.decode().split(' ', 2)
-    method = request_line_parts[0]
-    path = request_line_parts[1]
-    version = request_line_parts[2]
+    method, path, version = read_request_line(b, max_line_sz)
     fields = []
     content_length, chunked = _read_header_fields(b, fields, max_line_sz, max_field_cnt)
     req = HttpRequest(method, path, fields, NoBodyReader(), [], version)
@@ -580,16 +582,16 @@ def read_request_from(b: io.BufferedReader,
     return req
 
 
+def read_status_line(b: io.BufferedReader, max_line_sz: int = _MAX_READ_SZ) -> (str, str, str):
+    sl = _read_line_from(b, max_line_sz)
+    sl_parts = sl.decode('utf-8').split(' ', 2)
+    return sl_parts[0], sl_parts[1], sl_parts[2]
+
+
 def read_response_from(b: io.BufferedReader,
                        max_line_sz: int = _MAX_READ_SZ,
                        max_field_cnt: int = _MAX_HEADER_FIELD_CNT) -> HttpResponse:
-    status_line = _read_line_from(b, max_line_sz)
-    status_line_parts = status_line.decode().split(' ', 2)
-    version = status_line_parts[0]
-    status_code = status_line_parts[1]
-    if not status_code.isnumeric():
-        raise BlockingIOError("Invalid")
-    status_text = status_line_parts[2]
+    version, status_code, status_text = read_status_line(b, max_line_sz)
     status = (int(status_code), status_text)
     fields = []
     content_length, chunked = _read_header_fields(b, fields, max_line_sz, max_field_cnt)
