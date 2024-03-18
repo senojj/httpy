@@ -1,5 +1,4 @@
 import io
-import socket
 from typing import List, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
@@ -217,7 +216,7 @@ class NoBodyReader(BodyReader):
 
 
 class SizedBodyReader(BodyReader):
-    def __init__(self, r: io.BufferedReader, size: int):
+    def __init__(self, r: io.IOBase, size: int):
         self._reader = r
         self._pos = 0
         self._size = size
@@ -240,7 +239,7 @@ class SizedBodyReader(BodyReader):
 
 
 class StreamBodyReader(BodyReader):
-    def __init__(self, r: io.BufferedReader, trailers: List[Tuple[str, str]]):
+    def __init__(self, r: io.IOBase, trailers: List[Tuple[str, str]]):
         self._reader = r
         self._trailers = trailers
         self._buffer = bytearray()
@@ -302,7 +301,7 @@ class NoBodyWriter(BodyWriter):
 
 
 class SizedBodyWriter(BodyWriter):
-    def __init__(self, w: io.BufferedWriter, size: int):
+    def __init__(self, w: io.IOBase, size: int):
         self._writer = w
         self._size = size
         self._pos = 0
@@ -326,7 +325,7 @@ class SizedBodyWriter(BodyWriter):
 
 
 class StreamBodyWriter(BodyWriter):
-    def __init__(self, w: io.BufferedWriter, chunk_size: int, trailers: List[Tuple[str, str]]):
+    def __init__(self, w: io.IOBase, chunk_size: int, trailers: List[Tuple[str, str]]):
         self._writer = w
         self._buffer = bytearray()
         self._chunk_size = chunk_size
@@ -407,7 +406,7 @@ def _write_fields(buffer: bytearray, fields: List[Tuple[str, str]]):
 
 
 class RequestWriter:
-    def __init__(self, w: io.BufferedWriter):
+    def __init__(self, w: io.IOBase):
         self._chunked = False
         self._content_length = 0
         self._header_written = False
@@ -464,7 +463,7 @@ class RequestWriter:
 
 
 class ResponseWriter:
-    def __init__(self, w: io.BufferedWriter):
+    def __init__(self, w: io.IOBase):
         self._chunked = False
         self._content_length = 0
         self._header_written = False
@@ -520,7 +519,7 @@ class ResponseWriter:
         self._body_writer.close()
 
 
-def _read_line_from(b: io.BufferedReader, max_line_sz: int = _MAX_READ_SZ) -> bytes:
+def _read_line_from(b: io.IOBase, max_line_sz: int = _MAX_READ_SZ) -> bytes:
     buf = b.readline(max_line_sz)
     if buf[-2:] != b'\r\n':
         raise BlockingIOError(f"Unexpected end: {buf[-2:]}")
@@ -536,7 +535,7 @@ def _parse_field(line: str) -> Tuple[str, str]:
     return name, value
 
 
-def _read_header_fields(b: io.BufferedReader,
+def _read_header_fields(b: io.IOBase,
                         fields: List[Tuple[str, str]],
                         max_line_sz: int = _MAX_READ_SZ,
                         max_field_cnt: int = _MAX_HEADER_FIELD_CNT) -> (int, bool):
@@ -561,13 +560,13 @@ def _read_header_fields(b: io.BufferedReader,
     return content_length, chunked
 
 
-def read_request_line(b: io.BufferedReader, max_line_sz: _MAX_READ_SZ) -> (str, str, str):
+def read_request_line(b: io.IOBase, max_line_sz: _MAX_READ_SZ) -> (str, str, str):
     rl = _read_line_from(b, max_line_sz)
     rl_parts = rl.decode('utf-8').split(' ', 2)
     return rl_parts[0], rl_parts[1], rl_parts[2]
 
 
-def read_request_from(b: io.BufferedReader,
+def read_request_from(b: io.IOBase,
                       max_line_sz: int = _MAX_READ_SZ,
                       max_field_cnt: int = _MAX_HEADER_FIELD_CNT) -> HttpRequest:
     method, path, version = read_request_line(b, max_line_sz)
@@ -582,13 +581,13 @@ def read_request_from(b: io.BufferedReader,
     return req
 
 
-def read_status_line(b: io.BufferedReader, max_line_sz: int = _MAX_READ_SZ) -> (str, str, str):
+def read_status_line(b: io.IOBase, max_line_sz: int = _MAX_READ_SZ) -> (str, str, str):
     sl = _read_line_from(b, max_line_sz)
     sl_parts = sl.decode('utf-8').split(' ', 2)
     return sl_parts[0], sl_parts[1], sl_parts[2]
 
 
-def read_response_from(b: io.BufferedReader,
+def read_response_from(b: io.IOBase,
                        max_line_sz: int = _MAX_READ_SZ,
                        max_field_cnt: int = _MAX_HEADER_FIELD_CNT) -> HttpResponse:
     version, status_code, status_text = read_status_line(b, max_line_sz)
@@ -608,25 +607,35 @@ _CS_AWAIT_REQUEST = 1
 
 
 class HttpConnection:
-    def __init__(self, reader: io.BufferedReader, writer: io.BufferedWriter):
-        self._writer = writer
+    def __init__(self, reader: io.IOBase, writer: io.IOBase):
         self._reader = reader
+        self._writer = writer
+        self._closed = False
 
     def send_request(self) -> RequestWriter:
+        if self._closed:
+            raise ConnectionError("Connection is closed")
         return RequestWriter(self._writer)
 
     def receive_request(self) -> HttpRequest:
+        if self._closed:
+            raise ConnectionError("Connection is closed")
         return read_request_from(self._reader)
 
     def send_response(self) -> ResponseWriter:
+        if self._closed:
+            raise ConnectionError("Connection is closed")
         return ResponseWriter(self._writer)
 
     def receive_response(self) -> HttpResponse:
+        if self._closed:
+            raise ConnectionError("Connection is closed")
         return read_response_from(self._reader)
 
     def close(self):
-        self._writer.close()
-        self._reader.close()
+        if not self._closed:
+            self._writer.close()
+            self._reader.close()
 
 
 '''

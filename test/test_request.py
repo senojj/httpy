@@ -5,6 +5,12 @@ import gzip
 from typing import Generator
 from httpy import HttpConnection, VERSION_HTTP_1_1, METHOD_GET, StreamBodyWriter, StreamBodyReader, SizedBodyWriter
 
+payload = (b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
+           b"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip "
+           b"ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore "
+           b"eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia "
+           b"deserunt mollit anim id est laborum.")
+
 
 def chunk(size: int, data: bytes) -> Generator[bytes, None, None]:
     for i in range(0, len(data), size):
@@ -14,8 +20,7 @@ def chunk(size: int, data: bytes) -> Generator[bytes, None, None]:
 class TestPath(unittest.TestCase):
     def test_sized_body_writer(self):
         buf = io.BytesIO()
-        buf_writer = io.BufferedWriter(buf)
-        body_writer = SizedBodyWriter(buf_writer, 10)
+        body_writer = SizedBodyWriter(buf, 10)
         b_written = body_writer.write(b'aaaaa')
         self.assertEqual(b_written, 5)
         b_written = body_writer.write(b'bbbbb')
@@ -29,8 +34,7 @@ class TestPath(unittest.TestCase):
 
     def test_stream_body_writer(self):
         buf = io.BytesIO()
-        buf_writer = io.BufferedWriter(buf)
-        body_writer = StreamBodyWriter(buf_writer, 6, [('Test', '123')])
+        body_writer = StreamBodyWriter(buf, 6, [('Test', '123')])
         b_written = body_writer.write(b'aaaaa')
         self.assertEqual(b_written, 5)
         body_writer.flush()
@@ -82,13 +86,6 @@ class TestPath(unittest.TestCase):
         buf.close()
 
     def test_sized_socket(self):
-        payload = (
-            b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
-            b"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip "
-            b"ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore "
-            b"eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia "
-            b"deserunt mollit anim id est laborum.")
-
         s_client, s_server = socket.socketpair()
         client = HttpConnection(s_client.makefile('rb'), s_client.makefile('wb'))
         server = HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
@@ -124,13 +121,6 @@ class TestPath(unittest.TestCase):
         self.assertEqual(body, payload)
 
     def test_stream_socket(self):
-        payload = (
-            b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
-            b"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip "
-            b"ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore "
-            b"eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia "
-            b"deserunt mollit anim id est laborum.")
-
         s_client, s_server = socket.socketpair()
         client = HttpConnection(s_client.makefile('rb'), s_client.makefile('wb'))
         server = HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
@@ -161,16 +151,8 @@ class TestPath(unittest.TestCase):
         self.assertEqual(recv_request.trailers, [('Test', '123')])
 
     def test_gzip_streaming(self):
-        payload = (
-            b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
-            b"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip "
-            b"ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore "
-            b"eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia "
-            b"deserunt mollit anim id est laborum.")
-
         s_client = io.BytesIO()
-        w_client = io.BufferedWriter(s_client)
-        b_writer = StreamBodyWriter(w_client, 64, [])
+        b_writer = StreamBodyWriter(s_client, 64, [])
         g_client = gzip.GzipFile(filename=None, fileobj=b_writer, mode='wb')
 
         for data in chunk(6, payload):
