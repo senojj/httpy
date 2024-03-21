@@ -1,9 +1,9 @@
 import io
+from httpy import method
+from httpy import version
+from httpy import status
+from httpy import header
 from typing import List, Tuple
-from urllib.parse import urlsplit, urlunsplit
-
-VERSION_HTTP_1_0 = "HTTP/1.0"
-VERSION_HTTP_1_1 = "HTTP/1.1"
 
 _SCHEME_PORT = {
     'http': 80,
@@ -18,168 +18,9 @@ _REDIRECT_STATUS = [
     308
 ]
 
-METHOD_GET = 'GET'
-METHOD_POST = 'POST'
-METHOD_PUT = 'PUT'
-METHOD_PATCH = 'PATCH'
-METHOD_HEAD = 'HEAD'
-METHOD_OPTION = 'OPTION'
-
-STATUS_CONTINUE = 100
-STATUS_SWITCHING_PROTOCOLS = 101
-STATUS_OK = (200, 'OK')
-STATUS_CREATED = 201
-STATUS_ACCEPTED = 202
-STATUS_NON_AUTHORITATIVE_INFORMATION = 203
-STATUS_NO_CONTENT = 204
-STATUS_RESET_CONTENT = 205
-STATUS_PARTIAL_CONTENT = 206
-STATUS_MULTIPLE_CHOICES = 300
-STATUS_MOVED_PERMANENTLY = 301
-STATUS_FOUND = 302
-STATUS_SEE_OTHER = 303
-STATUS_NOT_MODIFIED = 304
-STATUS_USE_PROXY = 305
-STATUS_TEMPORARY_REDIRECT = 307
-STATUS_PERMANENT_REDIRECT = 308
-STATUS_BAD_REQUEST = 400
-STATUS_UNAUTHORIZED = 401
-STATUS_PAYMENT_REQUIRED = 402
-STATUS_FORBIDDEN = 403
-STATUS_NOT_FOUND = 404
-STATUS_METHOD_NOT_ALLOWED = 405
-STATUS_NOT_ACCEPTABLE = 406
-STATUS_PROXY_AUTHENTICATION_REQUIRED = 407
-STATUS_REQUEST_TIMEOUT = 408
-STATUS_CONFLICT = 409
-STATUS_GONE = 410
-STATUS_LENGTH_REQUIRED = 411
-STATUS_PRECONDITION_FAILED = 412
-STATUS_CONTENT_TOO_LARGE = 413
-STATUS_URI_TOO_LONG = 414
-STATUS_UNSUPPORTED_MEDIA_TYPE = 415
-STATUS_RANGE_NOT_SATISFIABLE = 416
-STATUS_EXPECTATION_FAILED = 417
-STATUS_MISDIRECTED_REQUEST = 421
-STATUS_UNPROCESSABLE_CONTENT = 422
-STATUS_UPGRADE_REQUIRED = 426
-STATUS_INTERNAL_SERVER_ERROR = 500
-STATUS_NOT_IMPLEMENTED = 501
-STATUS_BAD_GATEWAY = 502
-STATUS_SERVICE_UNAVAILABLE = 503
-STATUS_GATEWAY_TIMEOUT = 504
-STATUS_HTTP_VERSION_NOT_SUPPORTED = 505
-
 SCHEME_HTTP = 'http'
 SCHEME_HTTPS = 'https'
 _DEFAULT_SCHEME = SCHEME_HTTP
-
-_HEADER_FIELD_NAME_CHARACTER_MAP = [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b'-', 0, 0, b'0', b'1', b'2', b'3', b'4', b'5', b'6',
-    b'7', b'8', b'9', 0, 0, 0, 0, 0, 0, 0, b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I',
-    b'J', b'K', b'L', b'M', b'N', b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y',
-    b'Z', 0, 0, 0, 0, b'_', 0, b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k',
-    b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z', 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0,
-]
-
-
-def parse_header_field_name(name: str) -> bytes:
-    ba = str.encode(name)
-    for b in ba:
-        if _HEADER_FIELD_NAME_CHARACTER_MAP[b] == 0:
-            raise ValueError(f'Invalid header field name: {name}')
-    return ba
-
-
-_HEADER_FIELD_VALUE_CHARACTER_MAP = [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, b'\t', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, b' ', b'!', b'"', b'#', b'$', b'%', b'&', b'\'', b'(', b')', b'*', b'+', b',', b'-',
-    b'.', b'/', b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b':', b';', b'<', b'=',
-    b'>', b'?', b'@', b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M',
-    b'N', b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'[', b'\\',
-    b']', b'^', b'_', b'`', b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l',
-    b'm', b'n', b'o', b'p', b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z', b'{', b'|',
-    b'}', b'~', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0,
-]
-
-
-def parse_header_field_value(value: str) -> bytes:
-    ba = str.encode(value)
-    for b in ba:
-        if _HEADER_FIELD_VALUE_CHARACTER_MAP[b] == 0:
-            raise ValueError(f'Invalid header field value: {value}')
-    return ba
-
-
-def url_remove_dot_segments(path: str) -> str:
-    tokens, output, buf, pos = list(path), [], [], len(path) - 1
-    tokens.reverse()
-
-    while pos >= 0:
-        ctr = 0
-        buf.clear()
-        while pos >= 0:
-            buf.append(tokens[pos])
-            if tokens[pos] == '/' and ctr > 0:
-                break
-            pos = pos - 1
-            ctr = ctr + 1
-        segment = ''.join(buf)
-        if segment == '../' or segment == './':
-            pass
-        elif segment == '/./' or segment == '/.':
-            pos = max(pos, 0)
-            tokens[pos] = '/'
-        elif segment == '/../' or segment == '/..':
-            pos = max(pos, 0)
-            tokens[pos] = '/'
-            output = output[0:-1]
-        elif segment == '..' or segment == '.':
-            pass
-        else:
-            output.append(''.join(buf[:ctr]))
-
-    return ''.join(output)
-
-
-def url_transform_reference(base: str, reference: str) -> str:
-    b_scheme, b_netloc, b_path, b_query, b_fragment = urlsplit(base)
-    scheme, netloc, path, query, fragment = urlsplit(reference)
-
-    if scheme != '':
-        path = url_remove_dot_segments(path)
-    else:
-        if netloc != '':
-            path = url_remove_dot_segments(path)
-        else:
-            if path == '':
-                path = b_path
-                if query == '':
-                    query = b_query
-            else:
-                if path[0] == '/':
-                    path = url_remove_dot_segments(path)
-                else:
-                    if b_netloc != '' and b_path == '':
-                        path = '/' + path
-                    else:
-                        path = b_path[:b_path.rfind('/') + 1] + path
-                    path = url_remove_dot_segments(path)
-            netloc = b_netloc
-        scheme = b_scheme
-
-    return str(urlunsplit((scheme, netloc, path, query, fragment)))
-
 
 _MAX_READ_SZ = 1024
 _MAX_HEADER_FIELD_CNT = 100
@@ -275,8 +116,8 @@ class StreamBodyReader(BodyReader):
         count = 0
         while line != '' and count < _MAX_READ_SZ:
             field_parts = line.split(':', 1)
-            name = parse_header_field_name(str.rstrip(field_parts[0])).decode()
-            value = parse_header_field_value(str.lstrip(field_parts[1])).decode()
+            name = header.parse_field_name(str.rstrip(field_parts[0])).decode()
+            value = header.parse_field_value(str.lstrip(field_parts[1])).decode()
             self._trailers.append((name, value))
             count += 1
             line = _read_line_from(self._reader, _MAX_READ_SZ).decode()
@@ -397,10 +238,10 @@ class HttpResponse:
 
 def _write_fields(buffer: bytearray, fields: List[Tuple[str, str]]):
     for k, v in fields:
-        name = parse_header_field_name(k)
+        name = header.parse_field_name(k)
         buffer.extend(name)
         buffer.extend(b': ')
-        value = parse_header_field_value(v)
+        value = header.parse_field_value(v)
         buffer.extend(value)
         buffer.extend(b'\r\n')
 
@@ -430,20 +271,20 @@ class RequestWriter:
     def unset_header(self, key: str):
         self._header = [(k, v) for k, v in self._header if k.lower() != key.lower()]
 
-    def write_header(self, path: str, method: str = METHOD_GET, version: str = VERSION_HTTP_1_1):
-        request_line = str.encode(f'{method} {path} {version}\r\n')
+    def write_header(self, path: str, http_method: str = method.GET, http_version: str = version.HTTP_1_1):
+        request_line = str.encode(f'{http_method} {path} {http_version}\r\n')
         if self._content_length > 0:
             self.set_header("Content-Length", str(self._content_length))
         if self._chunked:
             self.set_header("Transfer-Encoding", "chunked")
             self.unset_header("Content-Length")
-        header = bytearray(request_line)
-        _write_fields(header, self._header)
+        h = bytearray(request_line)
+        _write_fields(h, self._header)
         self._header = []
-        header.extend(b'\r\n')
-        b_written = self._writer.write(header)
+        h.extend(b'\r\n')
+        b_written = self._writer.write(h)
         self._header_written = True
-        if b_written < len(header):
+        if b_written < len(h):
             raise BlockingIOError()
         if not self._chunked:
             self._body_writer = SizedBodyWriter(self._writer, self._content_length)
@@ -487,20 +328,20 @@ class ResponseWriter:
     def unset_header(self, key: str):
         self._header = [(k, v) for k, v in self._header if k.lower() != key.lower()]
 
-    def write_header(self, status: Tuple[int, str], version: str = VERSION_HTTP_1_1):
-        status_line = str.encode(f'{version} {status[0]} {status[1]}\r\n')
+    def write_header(self, status: Tuple[int, str], http_version: str = version.HTTP_1_1):
+        status_line = str.encode(f'{http_version} {status[0]} {status[1]}\r\n')
         if self._content_length > 0:
             self.set_header("Content-Length", str(self._content_length))
         if self._chunked:
             self.set_header("Transfer-Encoding", "chunked")
             self.unset_header("Content-Length")
-        header = bytearray(status_line)
-        _write_fields(header, self._header)
+        h = bytearray(status_line)
+        _write_fields(h, self._header)
         self._header = []
-        header.extend(b'\r\n')
-        b_written = self._writer.write(header)
+        h.extend(b'\r\n')
+        b_written = self._writer.write(h)
         self._header_written = True
-        if b_written < len(header):
+        if b_written < len(h):
             raise BlockingIOError()
         if not self._chunked:
             self._body_writer = SizedBodyWriter(self._writer, self._content_length)
@@ -509,7 +350,7 @@ class ResponseWriter:
 
     def write(self, data: bytes) -> int:
         if not self._header_written:
-            self.write_header(STATUS_OK)
+            self.write_header(status.OK)
         b_written = self._body_writer.write(data)
         return b_written
 
@@ -530,8 +371,8 @@ def _parse_field(line: str) -> Tuple[str, str]:
     field_parts = line.split(':', 1)
     if len(field_parts) != 2:
         raise BlockingIOError(f"illegal header field")
-    name = parse_header_field_name(str.rstrip(field_parts[0])).decode()
-    value = parse_header_field_value(str.lstrip(field_parts[1])).decode()
+    name = header.parse_field_name(str.rstrip(field_parts[0])).decode()
+    value = header.parse_field_value(str.lstrip(field_parts[1])).decode()
     return name, value
 
 
@@ -560,7 +401,7 @@ def _read_header_fields(b: io.IOBase,
     return content_length, chunked
 
 
-def read_request_line(b: io.IOBase, max_line_sz: _MAX_READ_SZ) -> (str, str, str):
+def _read_request_line(b: io.IOBase, max_line_sz: _MAX_READ_SZ) -> (str, str, str):
     rl = _read_line_from(b, max_line_sz)
     rl_parts = rl.decode('utf-8').split(' ', 2)
     return rl_parts[0], rl_parts[1], rl_parts[2]
@@ -569,7 +410,7 @@ def read_request_line(b: io.IOBase, max_line_sz: _MAX_READ_SZ) -> (str, str, str
 def read_request_from(b: io.IOBase,
                       max_line_sz: int = _MAX_READ_SZ,
                       max_field_cnt: int = _MAX_HEADER_FIELD_CNT) -> HttpRequest:
-    method, path, version = read_request_line(b, max_line_sz)
+    method, path, version = _read_request_line(b, max_line_sz)
     fields = []
     content_length, chunked = _read_header_fields(b, fields, max_line_sz, max_field_cnt)
     req = HttpRequest(method, path, fields, NoBodyReader(), [], version)
@@ -581,7 +422,7 @@ def read_request_from(b: io.IOBase,
     return req
 
 
-def read_status_line(b: io.IOBase, max_line_sz: int = _MAX_READ_SZ) -> (str, str, str):
+def _read_status_line(b: io.IOBase, max_line_sz: int = _MAX_READ_SZ) -> (str, str, str):
     sl = _read_line_from(b, max_line_sz)
     sl_parts = sl.decode('utf-8').split(' ', 2)
     return sl_parts[0], sl_parts[1], sl_parts[2]
@@ -590,7 +431,7 @@ def read_status_line(b: io.IOBase, max_line_sz: int = _MAX_READ_SZ) -> (str, str
 def read_response_from(b: io.IOBase,
                        max_line_sz: int = _MAX_READ_SZ,
                        max_field_cnt: int = _MAX_HEADER_FIELD_CNT) -> HttpResponse:
-    version, status_code, status_text = read_status_line(b, max_line_sz)
+    version, status_code, status_text = _read_status_line(b, max_line_sz)
     status = (int(status_code), status_text)
     fields = []
     content_length, chunked = _read_header_fields(b, fields, max_line_sz, max_field_cnt)
@@ -601,139 +442,3 @@ def read_response_from(b: io.IOBase,
         body = StreamBodyReader(b, res.trailers)
     res.body = body
     return res
-
-
-_CS_AWAIT_REQUEST = 1
-
-
-class HttpConnection:
-    def __init__(self, reader: io.IOBase, writer: io.IOBase):
-        self._reader = reader
-        self._writer = writer
-        self._closed = False
-
-    def send_request(self) -> RequestWriter:
-        if self._closed:
-            raise ConnectionError("Connection is closed")
-        return RequestWriter(self._writer)
-
-    def receive_request(self) -> HttpRequest:
-        if self._closed:
-            raise ConnectionError("Connection is closed")
-        return read_request_from(self._reader)
-
-    def send_response(self) -> ResponseWriter:
-        if self._closed:
-            raise ConnectionError("Connection is closed")
-        return ResponseWriter(self._writer)
-
-    def receive_response(self) -> HttpResponse:
-        if self._closed:
-            raise ConnectionError("Connection is closed")
-        return read_response_from(self._reader)
-
-    def close(self):
-        if not self._closed:
-            self._writer.close()
-            self._reader.close()
-
-
-'''
-class HttpClient:
-    def __init__(self,
-                 context: Optional[ssl.SSLContext] = None,
-                 default_tls: bool = False,
-                 pool: Optional[Pool] = None):
-        if pool is None:
-            self._connections = Pool()
-        else:
-            self._connections = pool
-        self._context = context
-        self._default_scheme = _DEFAULT_SCHEME
-        if default_tls:
-            self._default_scheme = SCHEME_HTTPS
-
-    def close(self):
-        self._connections.clear()
-
-    def do(self, request: HttpRequest) -> HttpResponse:
-        return self._do(request, 0)
-
-    def _do(self, request: HttpRequest, redirect_count: int) -> HttpResponse:
-        max_redirects = request.get_max_redirects()
-
-        if max_redirects is not None and redirect_count > max_redirects:
-            raise ValueError('exceeded maximum redirections')
-
-        url_parts = urlsplit(request.get_url())
-
-        if url_parts.scheme.strip() == '':
-            url_parts = url_parts._replace(scheme=self._default_scheme)
-
-        port = url_parts.port
-
-        if port is None:
-            port = _SCHEME_PORT.get(url_parts.scheme)
-
-        scheme = url_parts.scheme
-        host = url_parts.hostname
-        connection = self._connections.get(host, port)
-
-        use_tls = url_parts.scheme == SCHEME_HTTPS
-
-        if connection is None:
-            if use_tls:
-                connection = HTTPSConnection(host, port, context=self._context)
-            else:
-                connection = HTTPConnection(host, port)
-            self._connections[(scheme, host, port)] = connection
-
-        headers = request.get_headers()
-
-        if headers is None:
-            headers = {}
-
-        method = request.get_method()
-
-        if method is None:
-            method = METHOD_GET
-
-        request_url = str(urlunsplit(url_parts))
-
-        connection.request(method,
-                           request_url,
-                           body=request.get_body(),
-                           headers=headers)
-
-        response = connection.getresponse()
-
-        response = HttpResponse(request_url,
-                                response.status,
-                                response.version,
-                                Header(response.headers),
-                                Body(response))
-
-        status = response.get_status()
-
-        if status not in _REDIRECT_STATUS or not request.should_follow_redirects():
-            return response
-
-        location = response.get_headers().get('location')
-
-        if location is None:
-            raise ValueError('redirect specified but no location provided')
-
-        target_url = url_transform_reference(str(urlunsplit(url_parts)), location)
-
-        method = request.get_method()
-
-        if status == 303:
-            method = METHOD_GET
-
-        redirect_request = HttpRequest(target_url,
-                                       method=method,
-                                       headers=request.get_headers(),
-                                       body=request.get_body())
-
-        return self._do(redirect_request, redirect_count + 1)
-'''

@@ -2,8 +2,14 @@ import socket
 import io
 import unittest
 import gzip
+import httpy
+
+from httpy import client
+from httpy import server
+from httpy import method
+from httpy import version
+
 from typing import Generator
-from httpy import HttpConnection, VERSION_HTTP_1_1, METHOD_GET, StreamBodyWriter, StreamBodyReader, SizedBodyWriter
 
 payload = (b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
            b"dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip "
@@ -20,7 +26,7 @@ def chunk(size: int, data: bytes) -> Generator[bytes, None, None]:
 class TestPath(unittest.TestCase):
     def test_sized_body_writer(self):
         buf = io.BytesIO()
-        body_writer = SizedBodyWriter(buf, 10)
+        body_writer = httpy.SizedBodyWriter(buf, 10)
         b_written = body_writer.write(b'aaaaa')
         self.assertEqual(b_written, 5)
         b_written = body_writer.write(b'bbbbb')
@@ -34,7 +40,7 @@ class TestPath(unittest.TestCase):
 
     def test_stream_body_writer(self):
         buf = io.BytesIO()
-        body_writer = StreamBodyWriter(buf, 6, [('Test', '123')])
+        body_writer = httpy.StreamBodyWriter(buf, 6, [('Test', '123')])
         b_written = body_writer.write(b'aaaaa')
         self.assertEqual(b_written, 5)
         body_writer.flush()
@@ -87,45 +93,45 @@ class TestPath(unittest.TestCase):
 
     def test_sized_socket(self):
         s_client, s_server = socket.socketpair()
-        client = HttpConnection(s_client.makefile('rb'), s_client.makefile('wb'))
-        server = HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
+        c = client.HttpConnection(s_client.makefile('rb'), s_client.makefile('wb'))
+        s = server.HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
 
-        request = client.send_request()
+        request = c.send_request()
         request.add_header('Host', 'test.com')
         request.sized(len(payload))
         request.write_header('/hello-world')
         request.write(payload)
         request.close()
 
-        request = client.send_request()
+        request = c.send_request()
         request.add_header('Host', 'test.com')
         request.sized(5)
         request.write_header('/hello')
         request.write(b'hello')
         request.close()
 
-        recv_request = server.receive_request()
+        recv_request = s.receive_request()
         body = recv_request.body.read_all()
         recv_request.body.close()
 
-        client.close()
-        server.close()
+        c.close()
+        s.close()
 
         s_client.close()
         s_server.close()
 
-        self.assertEqual(recv_request.method, METHOD_GET)
-        self.assertEqual(recv_request.version, VERSION_HTTP_1_1)
+        self.assertEqual(recv_request.method, method.GET)
+        self.assertEqual(recv_request.version, version.HTTP_1_1)
         self.assertEqual(recv_request.path, '/hello-world')
         self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Content-Length', '445')])
         self.assertEqual(body, payload)
 
     def test_stream_socket(self):
         s_client, s_server = socket.socketpair()
-        client = HttpConnection(s_client.makefile('rb'), s_client.makefile('wb'))
-        server = HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
+        c = client.HttpConnection(s_client.makefile('rb'), s_client.makefile('wb'))
+        s = server.HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
 
-        request = client.send_request()
+        request = c.send_request()
         request.add_header('Host', 'test.com')
         request.chunked()
         request.write_header('/hello-world')
@@ -133,18 +139,18 @@ class TestPath(unittest.TestCase):
         request.add_header('Test', '123')
         request.close()
 
-        recv_request = server.receive_request()
+        recv_request = s.receive_request()
         body = recv_request.body.read_all()
         recv_request.body.close()
 
-        client.close()
-        server.close()
+        c.close()
+        s.close()
 
         s_client.close()
         s_server.close()
 
-        self.assertEqual(recv_request.method, METHOD_GET)
-        self.assertEqual(recv_request.version, VERSION_HTTP_1_1)
+        self.assertEqual(recv_request.method, method.GET)
+        self.assertEqual(recv_request.version, version.HTTP_1_1)
         self.assertEqual(recv_request.path, '/hello-world')
         self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Transfer-Encoding', 'chunked')])
         self.assertEqual(body, payload)
@@ -152,7 +158,7 @@ class TestPath(unittest.TestCase):
 
     def test_gzip_streaming(self):
         s_client = io.BytesIO()
-        b_writer = StreamBodyWriter(s_client, 64, [])
+        b_writer = httpy.StreamBodyWriter(s_client, 64, [])
         g_client = gzip.GzipFile(filename=None, fileobj=b_writer, mode='wb')
 
         for data in chunk(6, payload):
@@ -161,7 +167,7 @@ class TestPath(unittest.TestCase):
         g_client.close()
         b_writer.close()
         s_client.seek(0)
-        b_reader = StreamBodyReader(s_client, [])
+        b_reader = httpy.StreamBodyReader(s_client, [])
         value = b_reader.read_all()
         body = gzip.decompress(value)
         self.assertEqual(payload, body)

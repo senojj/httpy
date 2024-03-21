@@ -4,7 +4,9 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from urllib.parse import urlsplit
 
-import httpy
+from httpy import method
+from httpy import status
+from httpy import client
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -21,7 +23,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         handler = paths.get(url_parts.path)
 
         if handler is None:
-            self.send_response(httpy.STATUS_NOT_FOUND)
+            self.send_response(status.NOT_FOUND)
             self.end_headers()
         else:
             handler(self)
@@ -51,28 +53,28 @@ def generic(handler: RequestHandler):
 
 
 def get_only(handler: RequestHandler):
-    if handler.command != httpy.METHOD_GET:
-        handler.send_response(httpy.STATUS_METHOD_NOT_ALLOWED)
+    if handler.command != method.GET:
+        handler.send_response(status.METHOD_NOT_ALLOWED)
     else:
-        handler.send_response(httpy.STATUS_OK)
+        handler.send_response(status.OK)
     handler.end_headers()
 
 
 def post_only(handler: RequestHandler):
-    if handler.command != httpy.METHOD_POST:
-        handler.send_response(httpy.STATUS_METHOD_NOT_ALLOWED)
+    if handler.command != method.POST:
+        handler.send_response(status.METHOD_NOT_ALLOWED)
     else:
-        handler.send_response(httpy.STATUS_OK)
+        handler.send_response(status.OK)
     handler.end_headers()
 
 
 def ok_only(handler: RequestHandler):
-    handler.send_response(httpy.STATUS_OK)
+    handler.send_response(status.OK)
     handler.end_headers()
 
 
 def example(handler: RequestHandler):
-    handler.send_response(httpy.STATUS_MOVED_PERMANENTLY)
+    handler.send_response(status.MOVED_PERMANENTLY)
     handler.send_header('location', 'FAQ.html')
     handler.end_headers()
 
@@ -96,11 +98,11 @@ client_context = ssl.create_default_context()
 client_context.check_hostname = False
 client_context.verify_mode = ssl.CERT_NONE
 
-client = httpy.HttpClient(context=client_context)
+c = client.HttpClient(context=client_context)
 
 
 def tearDownModule():
-    client.close()
+    c.close()
     httpd.shutdown()
     httpsd.shutdown()
     httpd.server_close()
