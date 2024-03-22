@@ -40,7 +40,9 @@ class TestPath(unittest.TestCase):
 
     def test_stream_body_writer(self):
         buf = io.BytesIO()
-        body_writer = httpy.StreamBodyWriter(buf, 6, [('Test', '123')])
+        trailers = httpy.Header()
+        trailers.add_field('Test', '123')
+        body_writer = httpy.StreamBodyWriter(buf, 6, trailers)
         b_written = body_writer.write(b'aaaaa')
         self.assertEqual(b_written, 5)
         body_writer.flush()
@@ -97,17 +99,11 @@ class TestPath(unittest.TestCase):
         s = server.HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
 
         request = c.send_request()
-        request.add_header('Host', 'test.com')
+        request.path = '/hello-world'
+        request.method = method.POST
+        request.header().add_field('Host', 'test.com')
         request.sized(len(payload))
-        request.write_header('/hello-world')
         request.write(payload)
-        request.close()
-
-        request = c.send_request()
-        request.add_header('Host', 'test.com')
-        request.sized(5)
-        request.write_header('/hello')
-        request.write(b'hello')
         request.close()
 
         recv_request = s.receive_request()
@@ -120,10 +116,10 @@ class TestPath(unittest.TestCase):
         s_client.close()
         s_server.close()
 
-        self.assertEqual(recv_request.method, method.GET)
+        self.assertEqual(recv_request.method, method.POST)
         self.assertEqual(recv_request.version, version.HTTP_1_1)
         self.assertEqual(recv_request.path, '/hello-world')
-        self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Content-Length', '445')])
+        self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Content-Length', str(len(payload)))])
         self.assertEqual(body, payload)
 
     def test_stream_socket(self):
@@ -132,11 +128,11 @@ class TestPath(unittest.TestCase):
         s = server.HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
 
         request = c.send_request()
-        request.add_header('Host', 'test.com')
+        request.path = '/hello-world'
+        request.header().add_field('Host', 'test.com')
         request.chunked()
-        request.write_header('/hello-world')
         request.write(payload)
-        request.add_header('Test', '123')
+        request.header().add_field('Test', '123')
         request.close()
 
         recv_request = s.receive_request()
@@ -158,7 +154,7 @@ class TestPath(unittest.TestCase):
 
     def test_gzip_streaming(self):
         s_client = io.BytesIO()
-        b_writer = httpy.StreamBodyWriter(s_client, 64, [])
+        b_writer = httpy.StreamBodyWriter(s_client, 64, httpy.Header())
         g_client = gzip.GzipFile(filename=None, fileobj=b_writer, mode='wb')
 
         for data in chunk(6, payload):

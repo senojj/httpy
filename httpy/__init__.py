@@ -3,7 +3,7 @@ from httpy import method
 from httpy import version
 from httpy import status
 from httpy import header
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 _SCHEME_PORT = {
     'http': 80,
@@ -123,6 +123,28 @@ class StreamBodyReader(BodyReader):
             line = _read_line_from(self._reader, _MAX_READ_SZ).decode()
 
 
+class Header:
+    def __init__(self):
+        self._fields = []
+
+    def get_first(self, key: str) -> Optional[str]:
+        for k, v in self._fields:
+            if k.lower() == key.lower():
+                return v
+        return None
+
+    def add_field(self, key: str, value: str):
+        self._fields.append((key, value))
+
+    def set_field(self, key: str, value: Optional[str]):
+        self._fields = [(k, v) for k, v in self._fields if k.lower() != key.lower()]
+        if value is not None:
+            self.add_field(key, value)
+
+    def as_list(self) -> List[Tuple[str, str]]:
+        return self._fields
+
+
 class BodyWriter:
     def write(self, data: bytes) -> int:
         return 0
@@ -166,7 +188,7 @@ class SizedBodyWriter(BodyWriter):
 
 
 class StreamBodyWriter(BodyWriter):
-    def __init__(self, w: io.IOBase, chunk_size: int, trailers: List[Tuple[str, str]]):
+    def __init__(self, w: io.IOBase, chunk_size: int, trailers: Header):
         self._writer = w
         self._buffer = bytearray()
         self._chunk_size = chunk_size
@@ -197,7 +219,7 @@ class StreamBodyWriter(BodyWriter):
         self._writer.write(chunk)
         self._writer.write(b'\r\n0\r\n')
         buffer = bytearray()
-        _write_fields(buffer, self._trailers)
+        _write_fields(buffer, self._trailers.as_list())
         self._writer.write(buffer)
         self._writer.write(b'\r\n')
         self._writer.flush()
@@ -246,54 +268,52 @@ def _write_fields(buffer: bytearray, fields: List[Tuple[str, str]]):
         buffer.extend(b'\r\n')
 
 
-class RequestWriter:
+class MessageWriter:
     def __init__(self, w: io.IOBase):
-        self._chunked = False
-        self._content_length = 0
-        self._header_written = False
         self._writer = w
-        self._header = []
+        self._header_written = False
+        self._header = Header()
         self._body_writer = NoBodyWriter()
 
     def sized(self, value: int):
-        self._content_length = value
+        self._header.set_field('Content-Length', str(value))
+        self._header.set_field('Transfer-Encoding', None)
 
     def chunked(self, value: bool = True):
-        self._chunked = value
+        if value:
+            self._header.set_field('Transfer-Encoding', 'chunked')
+            self._header.set_field('Content-Length', None)
+        else:
+            self._header.set_field('Transfer-Encoding', None)
 
-    def add_header(self, key: str, value: str):
-        self._header.append((key, value))
+    def header(self) -> Header:
+        return self._header
 
-    def set_header(self, key: str, value: str):
-        self.unset_header(key)
-        self.add_header(key, value)
+    def _initial_data(self) -> bytes:
+        pass
 
-    def unset_header(self, key: str):
-        self._header = [(k, v) for k, v in self._header if k.lower() != key.lower()]
-
-    def write_header(self, path: str, http_method: str = method.GET, http_version: str = version.HTTP_1_1):
-        request_line = str.encode(f'{http_method} {path} {http_version}\r\n')
-        if self._content_length > 0:
-            self.set_header("Content-Length", str(self._content_length))
-        if self._chunked:
-            self.set_header("Transfer-Encoding", "chunked")
-            self.unset_header("Content-Length")
-        h = bytearray(request_line)
-        _write_fields(h, self._header)
-        self._header = []
+    def write_header(self):
+        if self._header_written:
+            return
+        h = bytearray(self._initial_data())
+        transfer_encoding = self._header.get_first('Transfer-Encoding')
+        content_length = self._header.get_first('Content-Length') or '0'
+        _write_fields(h, self._header.as_list())
+        # clear the header fields to make room for trailer fields.
+        self._header = Header()
         h.extend(b'\r\n')
         b_written = self._writer.write(h)
         self._header_written = True
         if b_written < len(h):
             raise BlockingIOError()
-        if not self._chunked:
-            self._body_writer = SizedBodyWriter(self._writer, self._content_length)
+        if not transfer_encoding == 'chunked':
+            self._body_writer = SizedBodyWriter(self._writer, int(content_length))
         else:
             self._body_writer = StreamBodyWriter(self._writer, 64, self._header)
 
     def write(self, data: bytes) -> int:
         if not self._header_written:
-            self.write_header('/')
+            self.write_header()
         b_written = self._body_writer.write(data)
         return b_written
 
@@ -303,61 +323,25 @@ class RequestWriter:
         self._body_writer.close()
 
 
-class ResponseWriter:
+class RequestWriter(MessageWriter):
     def __init__(self, w: io.IOBase):
-        self._chunked = False
-        self._content_length = 0
-        self._header_written = False
-        self._writer = w
-        self._header = []
-        self._body_writer = NoBodyWriter()
+        self.method = method.GET
+        self.path = '/'
+        self.version = version.HTTP_1_1
+        super().__init__(w)
 
-    def sized(self, value: int):
-        self._content_length = value
+    def _initial_data(self) -> bytes:
+        return str.encode(f'{self.method} {self.path} {self.version}\r\n')
 
-    def chunked(self, value: bool = True):
-        self._chunked = value
 
-    def add_header(self, key: str, value: str):
-        self._header.append((key, value))
+class ResponseWriter(MessageWriter):
+    def __init__(self, w: io.IOBase):
+        self._status = status.OK
+        self._version = version.HTTP_1_1
+        super().__init__(w)
 
-    def set_header(self, key: str, value: str):
-        self.unset_header(key)
-        self.add_header(key, value)
-
-    def unset_header(self, key: str):
-        self._header = [(k, v) for k, v in self._header if k.lower() != key.lower()]
-
-    def write_header(self, status: Tuple[int, str], http_version: str = version.HTTP_1_1):
-        status_line = str.encode(f'{http_version} {status[0]} {status[1]}\r\n')
-        if self._content_length > 0:
-            self.set_header("Content-Length", str(self._content_length))
-        if self._chunked:
-            self.set_header("Transfer-Encoding", "chunked")
-            self.unset_header("Content-Length")
-        h = bytearray(status_line)
-        _write_fields(h, self._header)
-        self._header = []
-        h.extend(b'\r\n')
-        b_written = self._writer.write(h)
-        self._header_written = True
-        if b_written < len(h):
-            raise BlockingIOError()
-        if not self._chunked:
-            self._body_writer = SizedBodyWriter(self._writer, self._content_length)
-        else:
-            self._body_writer = StreamBodyWriter(self._writer, 64, self._header)
-
-    def write(self, data: bytes) -> int:
-        if not self._header_written:
-            self.write_header(status.OK)
-        b_written = self._body_writer.write(data)
-        return b_written
-
-    def close(self):
-        if not self._header_written:
-            return
-        self._body_writer.close()
+    def _initial_data(self) -> bytes:
+        return str.encode(f'{self._version} {self._status[0]} {self._status[1]}\r\n')
 
 
 def _read_line_from(b: io.IOBase, max_line_sz: int = _MAX_READ_SZ) -> bytes:
