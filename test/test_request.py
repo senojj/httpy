@@ -18,7 +18,7 @@ payload = (b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiu
            b"deserunt mollit anim id est laborum.")
 
 
-def chunk(size: int, data: bytes) -> Generator[bytes, None, None]:
+def _chunk(size: int, data: bytes) -> Generator[bytes, None, None]:
     for i in range(0, len(data), size):
         yield data[i:i + size]
 
@@ -154,10 +154,10 @@ class TestPath(unittest.TestCase):
 
     def test_gzip_streaming(self):
         s_client = io.BytesIO()
-        b_writer = httpy.StreamBodyWriter(s_client, 64, httpy.Header())
+        b_writer = httpy.StreamBodyWriter(s_client, 6, httpy.Header())
         g_client = gzip.GzipFile(filename=None, fileobj=b_writer, mode='wb')
 
-        for data in chunk(6, payload):
+        for data in _chunk(6, payload):
             g_client.write(data)
 
         g_client.close()
