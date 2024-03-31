@@ -6,8 +6,6 @@ import httpy
 
 from httpy import client
 from httpy import server
-from httpy import method
-from httpy import version
 
 from typing import Generator
 
@@ -100,7 +98,7 @@ class TestPath(unittest.TestCase):
 
         request = c.send_request()
         request.path = '/hello-world'
-        request.method = method.POST
+        request.method = httpy.METHOD_POST
         request.header().add_field('Host', 'test.com')
         request.sized(len(payload))
         request.write(payload)
@@ -116,8 +114,8 @@ class TestPath(unittest.TestCase):
         s_client.close()
         s_server.close()
 
-        self.assertEqual(recv_request.method, method.POST)
-        self.assertEqual(recv_request.version, version.HTTP_1_1)
+        self.assertEqual(recv_request.method, httpy.METHOD_POST)
+        self.assertEqual(recv_request.version, httpy.VERSION_HTTP_1_1)
         self.assertEqual(recv_request.path, '/hello-world')
         self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Content-Length', str(len(payload)))])
         self.assertEqual(body, payload)
@@ -145,8 +143,8 @@ class TestPath(unittest.TestCase):
         s_client.close()
         s_server.close()
 
-        self.assertEqual(recv_request.method, method.GET)
-        self.assertEqual(recv_request.version, version.HTTP_1_1)
+        self.assertEqual(recv_request.method, httpy.METHOD_GET)
+        self.assertEqual(recv_request.version, httpy.VERSION_HTTP_1_1)
         self.assertEqual(recv_request.path, '/hello-world')
         self.assertEqual(recv_request.headers, [('Host', 'test.com'), ('Transfer-Encoding', 'chunked')])
         self.assertEqual(body, payload)

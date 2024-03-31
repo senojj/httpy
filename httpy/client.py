@@ -1,5 +1,11 @@
 import httpy
 import io
+import ssl
+import socket
+
+from typing import Optional, Tuple
+from httpy import url
+from urllib.parse import urlunsplit, urlsplit
 
 
 class HttpConnection:
@@ -24,94 +30,101 @@ class HttpConnection:
             self._receiver.close()
 
 
+def connect(host: str, port: int, context: Optional[ssl.SSLContext] = None) -> Tuple[HttpConnection, socket.socket]:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if context is not None:
+        sock = context.wrap_socket(sock)
+    sock.connect((host, port))
+    return HttpConnection(sock.makefile('rb'), sock.makefile('wb')), sock
+
+
 '''
 class HttpClient:
     def __init__(self,
+                 max_redirects: Optional[int] = 10,
                  context: Optional[ssl.SSLContext] = None):
         self._connections = {}
+        self._max_redirects = max_redirects
         self._context = context
 
     def close(self):
         self._connections.clear()
 
-    def do(self, request: HttpRequest) -> HttpResponse:
-        return self._do(request, 0)
+    def do(self, url: str, method: str = httpy.METHOD_GET, headers: List[Tuple[str, str]],  -> httpy.HttpResponse:
+        redirect_count = -1
+        while self._max_redirects is None or redirect_count < self._max_redirects:
+            url_parts = urlsplit(request.get_url())
 
-    def _do(self, request: HttpRequest, redirect_count: int) -> HttpResponse:
-        max_redirects = request.get_max_redirects()
+            if url_parts.scheme.strip() == '':
+                url_parts = url_parts._replace(scheme=httpy.SCHEME_HTTPS)
 
-        if max_redirects is not None and redirect_count > max_redirects:
-            raise ValueError('exceeded maximum redirections')
+            port = url_parts.port
 
-        url_parts = urlsplit(request.get_url())
+            if port is None:
+                port = _SCHEME_PORT.get(url_parts.scheme)
 
-        if url_parts.scheme.strip() == '':
-            url_parts = url_parts._replace(scheme=self._default_scheme)
+            scheme = url_parts.scheme
+            host = url_parts.hostname
+            connection = self._connections.get(host, port)
 
-        port = url_parts.port
+            use_tls = url_parts.scheme == SCHEME_HTTPS
 
-        if port is None:
-            port = _SCHEME_PORT.get(url_parts.scheme)
+            if connection is None:
+                if use_tls:
+                    connection = HTTPSConnection(host, port, context=self._context)
+                else:
+                    connection = HTTPConnection(host, port)
+                self._connections[(scheme, host, port)] = connection
 
-        scheme = url_parts.scheme
-        host = url_parts.hostname
-        connection = self._connections.get(host, port)
+            headers = request.get_headers()
 
-        use_tls = url_parts.scheme == SCHEME_HTTPS
+            if headers is None:
+                headers = {}
 
-        if connection is None:
-            if use_tls:
-                connection = HTTPSConnection(host, port, context=self._context)
-            else:
-                connection = HTTPConnection(host, port)
-            self._connections[(scheme, host, port)] = connection
+            method = request.get_method()
 
-        headers = request.get_headers()
+            if method is None:
+                method = METHOD_GET
 
-        if headers is None:
-            headers = {}
+            request_url = str(urlunsplit(url_parts))
 
-        method = request.get_method()
+            connection.request(method,
+                               request_url,
+                               body=request.get_body(),
+                               headers=headers)
 
-        if method is None:
-            method = METHOD_GET
+            response = connection.getresponse()
 
-        request_url = str(urlunsplit(url_parts))
+            response = HttpResponse(request_url,
+                                    response.status,
+                                    response.version,
+                                    Header(response.headers),
+                                    Body(response))
 
-        connection.request(method,
-                           request_url,
-                           body=request.get_body(),
-                           headers=headers)
+            status = response.get_status()
 
-        response = connection.getresponse()
+            if status not in _REDIRECT_STATUS or not request.should_follow_redirects():
+                return response
 
-        response = HttpResponse(request_url,
-                                response.status,
-                                response.version,
-                                Header(response.headers),
-                                Body(response))
+            location = response.get_headers().get('location')
 
-        status = response.get_status()
+            if location is None:
+                raise ValueError('redirect specified but no location provided')
 
-        if status not in _REDIRECT_STATUS or not request.should_follow_redirects():
-            return response
+            target_url = url.transform_reference(str(urlunsplit(url_parts)), location)
+            t_scheme, t_netloc, t_path, t_query, t_fragment = urlsplit(target_url)
 
-        location = response.get_headers().get('location')
+            http_method = request.method
 
-        if location is None:
-            raise ValueError('redirect specified but no location provided')
+            if status == 303:
+                http_method = method.GET
 
-        target_url = url.transform_reference(str(urlunsplit(url_parts)), location)
+            redirect_request = httpy.HttpRequest(http_method=http_method,
+                                                 path=
+                                           headers=request.get_headers(),
+                                           body=request.get_body())
 
-        method = request.get_method()
-
-        if status == 303:
-            method = method.GET
-
-        redirect_request = HttpRequest(target_url,
-                                       method=method,
-                                       headers=request.get_headers(),
-                                       body=request.get_body())
-
-        return self._do(redirect_request, redirect_count + 1)
+            request = redirect_request
+            redirect_count += 1
+        raise ValueError('exceeded maximum redirections')
 '''

@@ -1,9 +1,61 @@
 import io
-from httpy import method
-from httpy import version
-from httpy import status
+
 from httpy import header
 from typing import List, Tuple, Optional
+
+VERSION_HTTP_1_0 = "HTTP/1.0"
+VERSION_HTTP_1_1 = "HTTP/1.1"
+
+METHOD_GET = 'GET'
+METHOD_POST = 'POST'
+METHOD_PUT = 'PUT'
+METHOD_PATCH = 'PATCH'
+METHOD_HEAD = 'HEAD'
+METHOD_OPTION = 'OPTION'
+
+STATUS_CONTINUE = (100, 'Continue')
+STATUS_SWITCHING_PROTOCOLS = (101, 'Switching Protocols')
+STATUS_OK = (200, 'OK')
+STATUS_CREATED = (201, 'Created')
+STATUS_ACCEPTED = (202, 'Accepted')
+STATUS_NON_AUTHORITATIVE_INFORMATION = (203, 'Non-Authoritative Information')
+STATUS_NO_CONTENT = (204, 'No Content')
+STATUS_RESET_CONTENT = (205, 'Reset Content')
+STATUS_PARTIAL_CONTENT = (206, 'Partial content')
+STATUS_MULTIPLE_CHOICES = (300, 'Multiple Choices')
+STATUS_MOVED_PERMANENTLY = (301, 'Moved Permanently')
+STATUS_FOUND = (302, 'Found')
+STATUS_SEE_OTHER = (303, 'See Other')
+STATUS_NOT_MODIFIED = (304, 'Not Modified')
+STATUS_TEMPORARY_REDIRECT = (307, 'Temporary Redirect')
+STATUS_PERMANENT_REDIRECT = (308, 'Permanent Redirect')
+STATUS_BAD_REQUEST = (400, 'Bad Request')
+STATUS_UNAUTHORIZED = (401, 'Unauthorized')
+STATUS_PAYMENT_REQUIRED = (402, 'Payment Required')
+STATUS_FORBIDDEN = (403, 'Forbidden')
+STATUS_NOT_FOUND = (404, 'Not Found')
+STATUS_METHOD_NOT_ALLOWED = (405, 'Method Not Allowed')
+STATUS_NOT_ACCEPTABLE = (406, 'Not Acceptable')
+STATUS_PROXY_AUTHENTICATION_REQUIRED = (407, 'Proxy Authentication Required')
+STATUS_REQUEST_TIMEOUT = (408, 'Request Timeout')
+STATUS_CONFLICT = (409, 'Conflict')
+STATUS_GONE = (410, 'Gone')
+STATUS_LENGTH_REQUIRED = (411, 'Length Required')
+STATUS_PRECONDITION_FAILED = (412, 'Precondition Failed')
+STATUS_CONTENT_TOO_LARGE = (413, 'Content Too Large')
+STATUS_URI_TOO_LONG = (414, 'URI Too Long')
+STATUS_UNSUPPORTED_MEDIA_TYPE = (415, 'Unsupported Media Type')
+STATUS_RANGE_NOT_SATISFIABLE = (416, 'Range not Satisfiable')
+STATUS_EXPECTATION_FAILED = (417, 'Expectation Failed')
+STATUS_MISDIRECTED_REQUEST = (421, 'Misdirected Request')
+STATUS_UNPROCESSABLE_CONTENT = (422, 'Unprocessable Content')
+STATUS_UPGRADE_REQUIRED = (426, 'Upgrade Required')
+STATUS_INTERNAL_SERVER_ERROR = (500, 'Internal Server Error')
+STATUS_NOT_IMPLEMENTED = (501, 'Not Implemented')
+STATUS_BAD_GATEWAY = (502, 'Bad Gateway')
+STATUS_SERVICE_UNAVAILABLE = (503, 'Service Unavailable')
+STATUS_GATEWAY_TIMEOUT = (504, 'Gateway Timeout')
+STATUS_HTTP_VERSION_NOT_SUPPORTED = (505, 'HTTP Version Not Supported')
 
 _SCHEME_PORT = {
     'http': 80,
@@ -228,18 +280,18 @@ class StreamBodyWriter(BodyWriter):
 
 class HttpRequest:
     def __init__(self,
-                 method: str,
+                 http_method: str,
                  path: str,
                  headers: List[Tuple[str, str]],
                  body: BodyReader,
                  trailers: List[Tuple[str, str]],
-                 version: str):
-        self.method = method
+                 http_version: str = VERSION_HTTP_1_1):
+        self.method = http_method
         self.path = path
         self.headers = headers
         self.body = body
         self.trailers = trailers
-        self.version = version
+        self.version = http_version
 
 
 class HttpResponse:
@@ -323,9 +375,9 @@ class MessageWriter:
 
 class RequestWriter(MessageWriter):
     def __init__(self, w: io.IOBase):
-        self.method = method.GET
+        self.method = METHOD_GET
         self.path = '/'
-        self.version = version.HTTP_1_1
+        self.version = VERSION_HTTP_1_1
         super().__init__(w)
 
     def _initial_data(self) -> bytes:
@@ -334,8 +386,8 @@ class RequestWriter(MessageWriter):
 
 class ResponseWriter(MessageWriter):
     def __init__(self, w: io.IOBase):
-        self._status = status.OK
-        self._version = version.HTTP_1_1
+        self._status = STATUS_OK
+        self._version = VERSION_HTTP_1_1
         super().__init__(w)
 
     def _initial_data(self) -> bytes:
