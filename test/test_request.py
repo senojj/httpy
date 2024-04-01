@@ -38,8 +38,8 @@ class TestPath(unittest.TestCase):
 
     def test_stream_body_writer(self):
         buf = io.BytesIO()
-        trailers = httpy.Header()
-        trailers.add_field('Test', '123')
+        trailers = httpy.HeaderMap()
+        trailers.append_field('Test', '123')
         body_writer = httpy.StreamBodyWriter(buf, 6, trailers)
         b_written = body_writer.write(b'aaaaa')
         self.assertEqual(b_written, 5)
@@ -99,7 +99,7 @@ class TestPath(unittest.TestCase):
         request = c.send_request()
         request.path = '/hello-world'
         request.method = httpy.METHOD_POST
-        request.header().add_field('Host', 'test.com')
+        request.header().append_field('Host', 'test.com')
         request.sized(len(payload))
         request.write(payload)
         request.close()
@@ -127,10 +127,10 @@ class TestPath(unittest.TestCase):
 
         request = c.send_request()
         request.path = '/hello-world'
-        request.header().add_field('Host', 'test.com')
+        request.header().append_field('Host', 'test.com')
         request.chunked()
         request.write(payload)
-        request.header().add_field('Test', '123')
+        request.header().append_field('Test', '123')
         request.close()
 
         recv_request = s.receive_request()
@@ -152,7 +152,7 @@ class TestPath(unittest.TestCase):
 
     def test_gzip_streaming(self):
         s_client = io.BytesIO()
-        b_writer = httpy.StreamBodyWriter(s_client, 6, httpy.Header())
+        b_writer = httpy.StreamBodyWriter(s_client, 6, httpy.HeaderMap())
         g_client = gzip.GzipFile(filename=None, fileobj=b_writer, mode='wb')
 
         for data in _chunk(6, payload):

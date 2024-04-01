@@ -175,28 +175,6 @@ class StreamBodyReader(BodyReader):
             line = _read_line_from(self._reader, _MAX_READ_SZ).decode()
 
 
-class Header:
-    def __init__(self):
-        self._fields = []
-
-    def get_first(self, key: str) -> Optional[str]:
-        for k, v in self._fields:
-            if k.lower() == key.lower():
-                return v
-        return None
-
-    def add_field(self, key: str, value: str):
-        self._fields.append((key, value))
-
-    def set_field(self, key: str, value: Optional[str]):
-        self._fields = [(k, v) for k, v in self._fields if k.lower() != key.lower()]
-        if value is not None:
-            self.add_field(key, value)
-
-    def as_list(self) -> List[Tuple[str, str]]:
-        return self._fields
-
-
 class BodyWriter:
     def write(self, data: bytes) -> int:
         return 0
@@ -240,7 +218,7 @@ class SizedBodyWriter(BodyWriter):
 
 
 class StreamBodyWriter(BodyWriter):
-    def __init__(self, w: io.IOBase, chunk_size: int, trailers: Header):
+    def __init__(self, w: io.IOBase, chunk_size: int, trailers: header.FieldList):
         self._writer = w
         self._buffer = bytearray()
         self._chunk_size = chunk_size
@@ -280,11 +258,11 @@ class StreamBodyWriter(BodyWriter):
 
 class HttpRequest:
     def __init__(self,
-                 http_method: str,
-                 path: str,
-                 headers: List[Tuple[str, str]],
-                 body: BodyReader,
-                 trailers: List[Tuple[str, str]],
+                 path: str = '/',
+                 http_method: str = METHOD_GET,
+                 headers: header.FieldList = header.FieldList(),
+                 body: BodyReader = NoBodyReader(),
+                 trailers: header.FieldList = header.FieldList(),
                  http_version: str = VERSION_HTTP_1_1):
         self.method = http_method
         self.path = path
@@ -292,6 +270,9 @@ class HttpRequest:
         self.body = body
         self.trailers = trailers
         self.version = http_version
+
+    def host(self, value: str):
+        self.headers.set_field(header.HOST, value)
 
 
 class HttpResponse:
@@ -322,7 +303,7 @@ class MessageWriter:
     def __init__(self, w: io.IOBase):
         self._writer = w
         self._header_written = False
-        self._header = Header()
+        self._header = header.FieldList()
         self._body_writer = NoBodyWriter()
 
     def sized(self, value: int):
@@ -331,12 +312,12 @@ class MessageWriter:
 
     def chunked(self, value: bool = True):
         if value:
-            self._header.set_field('Transfer-Encoding', 'chunked')
-            self._header.set_field('Content-Length', None)
+            self._header.set_field(header.TRANSFER_ENCODING, 'chunked')
+            self._header.set_field(header.CONTENT_LENGTH, None)
         else:
-            self._header.set_field('Transfer-Encoding', None)
+            self._header.set_field(header.TRANSFER_ENCODING, None)
 
-    def header(self) -> Header:
+    def header(self) -> header.FieldList:
         return self._header
 
     def _initial_data(self) -> bytes:
@@ -346,11 +327,11 @@ class MessageWriter:
         if self._header_written:
             return
         h = bytearray(self._initial_data())
-        transfer_encoding = self._header.get_first('Transfer-Encoding')
-        content_length = self._header.get_first('Content-Length') or '0'
+        transfer_encoding = self._header.get_first(header.TRANSFER_ENCODING)
+        content_length = self._header.get_first(header.CONTENT_LENGTH) or '0'
         _write_fields(h, self._header.as_list())
         # clear the header fields to make room for trailer fields.
-        self._header = Header()
+        self._header = header.FieldList()
         h.extend(b'\r\n')
         b_written = self._writer.write(h)
         self._header_written = True
@@ -447,7 +428,7 @@ def read_request_from(b: io.IOBase,
     method, path, version = _read_request_line(b, max_line_sz)
     fields = []
     content_length, chunked = _read_header_fields(b, fields, max_line_sz, max_field_cnt)
-    req = HttpRequest(method, path, fields, NoBodyReader(), [], version)
+    req = HttpRequest(path, method, header.FieldList(fields), NoBodyReader(), header.FieldList(), version)
     if not chunked:
         body = SizedBodyReader(b, content_length)
     else:

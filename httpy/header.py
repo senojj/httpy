@@ -1,3 +1,10 @@
+from typing import Optional, List, Tuple
+
+HOST = 'Host'
+CONTENT_TYPE = 'Content-Type'
+CONTENT_LENGTH = 'Content-Length'
+TRANSFER_ENCODING = 'Transfer-Encoding'
+
 _HEADER_FIELD_NAME_CHARACTER_MAP = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b'-', 0, 0, b'0', b'1', b'2', b'3', b'4', b'5', b'6',
@@ -43,3 +50,29 @@ def parse_field_value(value: str) -> bytes:
         if _HEADER_FIELD_VALUE_CHARACTER_MAP[b] == 0:
             raise ValueError(f'Invalid header field value: {value}')
     return ba
+
+
+class FieldList:
+    def __init__(self, fields: Optional[List[Tuple[str, str]]] = None):
+        if fields is None:
+            self._fields = []
+        else:
+            self._fields = fields
+
+    def get_first(self, key: str) -> Optional[str]:
+        for k, v in self._fields:
+            if k.lower() == key.lower():
+                return v
+        return None
+
+    def append_field(self, key: str, value: str):
+        self._fields.append((key, value))
+
+    def set_field(self, key: str, value: Optional[str]):
+        self._fields = [(k, v) for k, v in self._fields if k.lower() != key.lower()]
+        if value is not None:
+            self.append_field(key, value)
+
+    def as_list(self) -> List[Tuple[str, str]]:
+        return self._fields
+

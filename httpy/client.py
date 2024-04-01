@@ -3,7 +3,7 @@ import io
 import ssl
 import socket
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from httpy import url
 from urllib.parse import urlunsplit, urlsplit
 
@@ -30,13 +30,12 @@ class HttpConnection:
             self._receiver.close()
 
 
-def connect(host: str, port: int, context: Optional[ssl.SSLContext] = None) -> Tuple[HttpConnection, socket.socket]:
+def connect(host: Tuple[str, int], context: Optional[ssl.SSLContext] = None) -> Tuple[HttpConnection, socket.socket]:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     if context is not None:
         sock = context.wrap_socket(sock)
-    sock.connect((host, port))
+    sock.connect(host)
     return HttpConnection(sock.makefile('rb'), sock.makefile('wb')), sock
-
 
 '''
 class HttpClient:
@@ -50,7 +49,17 @@ class HttpClient:
     def close(self):
         self._connections.clear()
 
-    def do(self, url: str, method: str = httpy.METHOD_GET, headers: List[Tuple[str, str]],  -> httpy.HttpResponse:
+    def do(self,
+           host: Tuple[str, int],
+           request: httpy.HttpRequest = httpy.HttpRequest(),
+           context: Optional[ssl.SSLContext] = None) -> httpy.HttpResponse:
+        sock = self.connections.get(host)
+        if sock is None:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(host)
+            self._connections[host] = sock
+        
+
         redirect_count = -1
         while self._max_redirects is None or redirect_count < self._max_redirects:
             url_parts = urlsplit(request.get_url())
@@ -84,7 +93,7 @@ class HttpClient:
             method = request.get_method()
 
             if method is None:
-                method = METHOD_GET
+                method = httpy.METHOD_GET
 
             request_url = str(urlunsplit(url_parts))
 
@@ -121,8 +130,8 @@ class HttpClient:
 
             redirect_request = httpy.HttpRequest(http_method=http_method,
                                                  path=
-                                           headers=request.get_headers(),
-                                           body=request.get_body())
+                                                 headers = request.get_headers(),
+            body = request.get_body())
 
             request = redirect_request
             redirect_count += 1
