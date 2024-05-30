@@ -7,37 +7,49 @@ from typing import Optional, Tuple, List
 from httpy import url
 from urllib.parse import urlunsplit, urlsplit
 
+_SCHEME_PORT = {
+    httpy.SCHEME_HTTP: 80,
+    httpy.SCHEME_HTTPS: 443
+}
 
-class HttpConnection:
-    def __init__(self, receiver: io.IOBase, sender: io.IOBase):
-        self._receiver = receiver
-        self._sender = sender
+_REDIRECT_STATUS = [
+    301,
+    302,
+    303,
+    307,
+    308
+]
+
+
+class ClientConnection:
+    def __init__(self, sock: socket.socket):
+        self._socket = sock
         self._closed = False
 
     def send_request(self) -> httpy.RequestWriter:
         if self._closed:
-            raise ConnectionError("Connection is closed")
-        return httpy.RequestWriter(self._sender)
+            raise ConnectionError("connection is closed")
+        return httpy.RequestWriter(self._socket.makefile('wb'))
 
     def receive_response(self) -> httpy.HttpResponse:
         if self._closed:
-            raise ConnectionError("Connection is closed")
-        return httpy.read_response_from(self._receiver)
+            raise ConnectionError("connection is closed")
+        return httpy.read_response_from(self._socket.makefile('rb'))
 
     def close(self):
         if not self._closed:
-            self._sender.close()
-            self._receiver.close()
+            self._socket.close()
+            self._closed = True
 
 
-def connect(host: Tuple[str, int], context: Optional[ssl.SSLContext] = None) -> Tuple[HttpConnection, socket.socket]:
+def connect(host: Tuple[str, int], context: Optional[ssl.SSLContext] = None) -> Tuple[ClientConnection, socket.socket]:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     if context is not None:
         sock = context.wrap_socket(sock)
     sock.connect(host)
-    return HttpConnection(sock.makefile('rb'), sock.makefile('wb')), sock
+    return ClientConnection(sock.makefile('rb'), sock.makefile('wb')), sock
 
-'''
+
 class HttpClient:
     def __init__(self,
                  max_redirects: Optional[int] = 10,
@@ -49,17 +61,9 @@ class HttpClient:
     def close(self):
         self._connections.clear()
 
-    def do(self,
-           host: Tuple[str, int],
-           request: httpy.HttpRequest = httpy.HttpRequest(),
-           context: Optional[ssl.SSLContext] = None) -> httpy.HttpResponse:
-        sock = self.connections.get(host)
-        if sock is None:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(host)
-            self._connections[host] = sock
-        
-
+    def send(self,
+             sock: socket.socket,
+             request: httpy.HttpRequest = httpy.HttpRequest()) -> httpy.HttpResponse:
         redirect_count = -1
         while self._max_redirects is None or redirect_count < self._max_redirects:
             url_parts = urlsplit(request.get_url())
@@ -70,20 +74,13 @@ class HttpClient:
             port = url_parts.port
 
             if port is None:
-                port = _SCHEME_PORT.get(url_parts.scheme)
+                port = httpy._SCHEME_PORT.get(url_parts.scheme)
 
             scheme = url_parts.scheme
             host = url_parts.hostname
             connection = self._connections.get(host, port)
 
             use_tls = url_parts.scheme == SCHEME_HTTPS
-
-            if connection is None:
-                if use_tls:
-                    connection = HTTPSConnection(host, port, context=self._context)
-                else:
-                    connection = HTTPConnection(host, port)
-                self._connections[(scheme, host, port)] = connection
 
             headers = request.get_headers()
 
@@ -136,4 +133,3 @@ class HttpClient:
             request = redirect_request
             redirect_count += 1
         raise ValueError('exceeded maximum redirections')
-'''

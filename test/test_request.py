@@ -6,6 +6,7 @@ import httpy
 
 from httpy import client
 from httpy import server
+from httpy import header
 
 from typing import Generator
 
@@ -38,7 +39,7 @@ class TestPath(unittest.TestCase):
 
     def test_stream_body_writer(self):
         buf = io.BytesIO()
-        trailers = httpy.HeaderMap()
+        trailers = header.FieldList()
         trailers.append_field('Test', '123')
         body_writer = httpy.StreamBodyWriter(buf, 6, trailers)
         b_written = body_writer.write(b'aaaaa')
@@ -93,8 +94,8 @@ class TestPath(unittest.TestCase):
 
     def test_sized_socket(self):
         s_client, s_server = socket.socketpair()
-        c = client.HttpConnection(s_client.makefile('rb'), s_client.makefile('wb'))
-        s = server.HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
+        c = client.ClientConnection(s_client.makefile('rb'), s_client.makefile('wb'))
+        s = server.ServerConnection(s_server.makefile('rb'), s_server.makefile('wb'))
 
         request = c.send_request()
         request.path = '/hello-world'
@@ -122,8 +123,8 @@ class TestPath(unittest.TestCase):
 
     def test_stream_socket(self):
         s_client, s_server = socket.socketpair()
-        c = client.HttpConnection(s_client.makefile('rb'), s_client.makefile('wb'))
-        s = server.HttpConnection(s_server.makefile('rb'), s_server.makefile('wb'))
+        c = client.ClientConnection(s_client.makefile('rb'), s_client.makefile('wb'))
+        s = server.ServerConnection(s_server.makefile('rb'), s_server.makefile('wb'))
 
         request = c.send_request()
         request.path = '/hello-world'

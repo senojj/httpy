@@ -1,6 +1,6 @@
 import unittest
 
-from httpy import url_remove_dot_segments, url_transform_reference
+from httpy.url import remove_dot_segments, transform_reference
 
 
 class TestPath(unittest.TestCase):
@@ -8,60 +8,60 @@ class TestPath(unittest.TestCase):
         reference = '/a/b/c/./../../g'
         target = '/a/g'
 
-        self.assertEqual(target, url_remove_dot_segments(reference))
+        self.assertEqual(target, remove_dot_segments(reference))
 
     def test_dot_segments_leading_character(self):
         reference = 'mid/content=5/../6'
         target = 'mid/6'
 
-        self.assertEqual(target, url_remove_dot_segments(reference))
+        self.assertEqual(target, remove_dot_segments(reference))
 
     def test_process_rfc_3986(self):
-        base = 'http://a/b/c/d;p?q'
+        base = '/b/c/d;p?q'
         cases = {
             'g:h': 'g:h',
-            'g': 'http://a/b/c/g',
-            './g': 'http://a/b/c/g',
-            'g/': 'http://a/b/c/g/',
-            '/g': 'http://a/g',
-            '//g': 'http://g',
-            '?y': 'http://a/b/c/d;p?y',
-            'g?y': 'http://a/b/c/g?y',
-            '#s': 'http://a/b/c/d;p?q#s',
-            'g#s': 'http://a/b/c/g#s',
-            'g?y#s': 'http://a/b/c/g?y#s',
-            ';x': 'http://a/b/c/;x',
-            'g;x': 'http://a/b/c/g;x',
-            'g;x?y#s': 'http://a/b/c/g;x?y#s',
-            '': 'http://a/b/c/d;p?q',
-            '.': 'http://a/b/c/',
-            './': 'http://a/b/c/',
-            '..': 'http://a/b/',
-            '../': 'http://a/b/',
-            '../g': 'http://a/b/g',
-            '../..': 'http://a/',
-            '../../': 'http://a/',
-            '../../g': 'http://a/g',
-            '../../../g': 'http://a/g',
-            '../../../../g': 'http://a/g',
-            '/./g': 'http://a/g',
-            '/../g': 'http://a/g',
-            'g.': 'http://a/b/c/g.',
-            '.g': 'http://a/b/c/.g',
-            'g..': 'http://a/b/c/g..',
-            '..g': 'http://a/b/c/..g',
-            './../g': 'http://a/b/g',
-            './g/.': 'http://a/b/c/g/',
-            'g/./h': 'http://a/b/c/g/h',
-            'g/../h': 'http://a/b/c/h',
-            'g;x=1/./y': 'http://a/b/c/g;x=1/y',
-            'g;x=1/../y': 'http://a/b/c/y',
-            'g?y/./x': 'http://a/b/c/g?y/./x',
-            'g?y/../x': 'http://a/b/c/g?y/../x',
-            'g#s/./x': 'http://a/b/c/g#s/./x',
-            'g#s/../x': 'http://a/b/c/g#s/../x'
+            'g': '/b/c/g',
+            './g': '/b/c/g',
+            'g/': '/b/c/g/',
+            '/g': '/g',
+            '//g': '//g',
+            '?y': '/b/c/d;p?y',
+            'g?y': '/b/c/g?y',
+            '#s': '/b/c/d;p?q#s',
+            'g#s': '/b/c/g#s',
+            'g?y#s': '/b/c/g?y#s',
+            ';x': '/b/c/;x',
+            'g;x': '/b/c/g;x',
+            'g;x?y#s': '/b/c/g;x?y#s',
+            '': '/b/c/d;p?q',
+            '.': '/b/c/',
+            './': '/b/c/',
+            '..': '/b/',
+            '../': '/b/',
+            '../g': '/b/g',
+            '../..': '/',
+            '../../': '/',
+            '../../g': '/g',
+            '../../../g': '/g',
+            '../../../../g': '/g',
+            '/./g': '/g',
+            '/../g': '/g',
+            'g.': '/b/c/g.',
+            '.g': '/b/c/.g',
+            'g..': '/b/c/g..',
+            '..g': '/b/c/..g',
+            './../g': '/b/g',
+            './g/.': '/b/c/g/',
+            'g/./h': '/b/c/g/h',
+            'g/../h': '/b/c/h',
+            'g;x=1/./y': '/b/c/g;x=1/y',
+            'g;x=1/../y': '/b/c/y',
+            'g?y/./x': '/b/c/g?y/./x',
+            'g?y/../x': '/b/c/g?y/../x',
+            'g#s/./x': '/b/c/g#s/./x',
+            'g#s/../x': '/b/c/g#s/../x'
         }
 
         for k in cases:
             with self.subTest(i=k):
-                self.assertEqual(cases[k], url_transform_reference(base, k), 'case=%s' % k)
+                self.assertEqual(cases[k], transform_reference(base, k), 'case=%s' % k)

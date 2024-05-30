@@ -2,7 +2,7 @@ import httpy
 import io
 
 
-class HttpConnection:
+class ServerConnection:
     def __init__(self, receiver: io.IOBase, sender: io.IOBase):
         self._receiver = receiver
         self._sender = sender

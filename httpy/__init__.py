@@ -1,5 +1,6 @@
 import io
 
+import httpy
 from httpy import header
 from typing import List, Tuple, Optional
 
@@ -56,19 +57,6 @@ STATUS_BAD_GATEWAY = (502, 'Bad Gateway')
 STATUS_SERVICE_UNAVAILABLE = (503, 'Service Unavailable')
 STATUS_GATEWAY_TIMEOUT = (504, 'Gateway Timeout')
 STATUS_HTTP_VERSION_NOT_SUPPORTED = (505, 'HTTP Version Not Supported')
-
-_SCHEME_PORT = {
-    'http': 80,
-    'https': 443
-}
-
-_REDIRECT_STATUS = [
-    301,
-    302,
-    303,
-    307,
-    308
-]
 
 SCHEME_HTTP = 'http'
 SCHEME_HTTPS = 'https'
@@ -457,3 +445,7 @@ def read_response_from(b: io.IOBase,
         body = StreamBodyReader(b, res.trailers)
     res.body = body
     return res
+
+
+class HeaderMap:
+    pass
